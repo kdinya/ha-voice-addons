@@ -1,76 +1,33 @@
 # HA Voice Add-ons
 
-Репозиторій аддонів для голосового асистента Home Assistant.
+Репозиторій: https://github.com/kdinya/ha-voice-addons
 
 | Аддон | Призначення | Порт |
 |-------|-------------|------|
-| **Voice Match** | Верифікація голосу + очищення фону | 10350 |
-| **Wyoming OpenAI STT** | STT через Groq / OpenAI / будь-який OpenAI-compatible API | 10300 |
-
-Разом: спочатку OpenAI STT, потім Voice Match вказує на нього — приймається лише ваш голос.
-
----
+| **Voice Match** | Верифікація голосу, запис у UI, enrollment | 10350 |
+| **Wyoming OpenAI STT** | STT через Groq / OpenAI (uk + ru) | 10300 |
 
 ## Встановлення
 
-1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**
-2. Додайте URL цього репозиторію:
-   ```
-   https://github.com/YOUR_USERNAME/ha-voice-addons
-   ```
-3. Оновіть список аддонів.
+Settings → Add-ons → Add-on Store → ⋮ → Repositories → додайте:
 
-[![Add repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FYOUR_USERNAME%2Fha-voice-addons)
+```
+https://github.com/kdinya/ha-voice-addons
+```
 
----
+[![Add repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fkdinya%2Fha-voice-addons)
 
-## Рекомендований шлях (Groq + Voice Match)
+## Швидкий старт
 
-### 1. Wyoming OpenAI STT
+1. **Wyoming OpenAI STT** — base_url Groq, api_key, model `whisper-large-v3-turbo`, мови `uk ru`, режим `auto`
+2. **Voice Match** — upstream `tcp://homeassistant:10300`
+3. Бічне меню Voice Match → запис / файли → перевірка → enrollment → **Restart**
+4. Wyoming Protocol порт **10350** → pipeline STT = Voice Match
 
-- **base_url**: `https://api.groq.com/openai/v1`
-- **api_key**: з [console.groq.com](https://console.groq.com)
-- **model**: `whisper-large-v3-turbo`
-- **languages**: `uk en`
-- Start
+## Будь-який голос без перевірки
 
-### 2. Voice Match
+Configuration → **Вимагати збіг голосу** → вимкнути.
 
-- **upstream_uri**: `tcp://homeassistant:10300`  
-  (або кнопка «Сканувати Wyoming STT» у веб-UI)
-- **stt_languages**: `uk` або `uk,en`
-- Start → бічне меню **Voice Match** → enrollment (3–5 записів) → Restart
+## Інші STT у HA
 
-### 3. Home Assistant
-
-- Wyoming Protocol → host = HA, port **10350**
-- Voice Assistant pipeline → Speech-to-Text → **Voice Match**
-
----
-
-## Якщо текст розпізнається з помилками
-
-Це налаштування **STT**, не Voice Match:
-
-1. Мова pipeline = українська
-2. Модель Groq: `whisper-large-v3` (точніше) або turbo
-3. Менше шуму, чіткіша вимова
-4. У Voice Match трохи знизьте **Поріг виділення голосу з фону** (0.28–0.32), якщо обрізає слова
-
-Пороги Voice Match (`verify_threshold`) впливають лише на те, **чий** голос приймається, а не на якість тексту.
-
----
-
-## Що нового в 1.3 / 1.1
-
-- Кнопка сканування Wyoming STT у UI Voice Match
-- Зрозуміліші підписи полів українською
-- Документація з рекомендованими моделями та порогами
-- Підказки щодо якості розпізнавання
-
----
-
-## Credits
-
-- Voice Match — на основі [jxlarrea/wyoming-voice-match](https://github.com/jxlarrea/wyoming-voice-match)
-- OpenAI STT — [roryeckel/wyoming_openai](https://github.com/roryeckel/wyoming_openai)
+Якщо всі команди йдуть через Voice Match → цей Groq STT, інші STT-аддони / інтеграції можна видалити, щоб не плутались у pipeline.

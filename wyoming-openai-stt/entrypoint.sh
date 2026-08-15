@@ -63,6 +63,10 @@ else
   echo "[wyoming-openai-stt] Language mode: fixed ($FIRST_LANG)"
 fi
 
+if [[ -z "$API_KEY" ]]; then
+  echo "[wyoming-openai-stt] WARNING: API key is empty — set api_key in Configuration"
+fi
+
 echo "[wyoming-openai-stt] Starting STT-only proxy"
 echo "[wyoming-openai-stt]   base_url  = $BASE_URL"
 echo "[wyoming-openai-stt]   model     = $MODEL"

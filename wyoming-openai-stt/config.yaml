@@ -1,8 +1,8 @@
 name: "Wyoming OpenAI STT"
-version: "1.2.0"
+version: "1.4.0"
 slug: "wyoming_openai_stt"
-description: "Wyoming Speech-to-Text через OpenAI-compatible API (Groq, OpenAI тощо). Мови: українська та російська, auto-визначення."
-url: "https://github.com/YOUR_USERNAME/ha-voice-addons"
+description: "Розпізнавання мови через Groq або OpenAI (українська та російська). Працює як Wyoming STT для Home Assistant і як upstream для Voice Match."
+url: "https://github.com/kdinya/ha-voice-addons"
 arch:
   - amd64
   - aarch64
@@ -12,7 +12,7 @@ init: false
 ports:
   10300/tcp: 10300
 ports_description:
-  10300/tcp: "Wyoming protocol — додайте як Wyoming Protocol або upstream для Voice Match"
+  10300/tcp: "Порт Wyoming — інтеграція або upstream для Voice Match"
 map:
   - data:rw
 options:

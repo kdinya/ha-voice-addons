@@ -3,65 +3,88 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Voice Match — Enrollment</title>
+  <title>Voice Match</title>
   <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
   <div class="container">
     <header>
       <h1>🎤 Voice Match</h1>
-      <p class="subtitle">Реєстрація голосу та пошук Wyoming STT</p>
+      <p class="subtitle">Запис голосу, перевірка зразків, enrollment</p>
     </header>
 
     <div id="flash-box"></div>
+    <div id="restart-banner" class="banner warn hidden">
+      <span>⚠ Voiceprint оновлено — потрібен перезапуск аддона.</span>
+      <button type="button" class="btn primary" id="btn-restart">🔄 Restart аддона</button>
+    </div>
 
-    <!-- Scan STT -->
     <section class="card">
       <h2>0. Пошук Wyoming STT</h2>
-      <p class="hint">
-        Знаходить працюючі STT-сервіси в мережі Home Assistant
-        (порт 10300 тощо). Скопіюйте URI в Configuration → <strong>upstream_uri</strong>.
-      </p>
       <p class="hint">Поточний upstream: <code id="current-upstream">—</code></p>
       <button type="button" class="btn secondary" id="btn-scan">🔍 Сканувати Wyoming STT</button>
       <div id="scan-results" class="scan-results hidden"></div>
     </section>
 
     <section class="card">
-      <h2>1. Завантажити аудіо</h2>
-      <p class="hint">
-        Формати: .wav, .flac, .ogg, .mp3.
-        Бажано 16 kHz mono, 3–10 секунд. Оптимально 3–5 різних записів
-        (різний тон, відстань, гучність, без сильного фону).
-      </p>
-
+      <h2>1. Ім'я спікера</h2>
       <div class="field">
-        <label for="speaker">Ім'я спікера</label>
+        <label for="speaker">Ім'я (латиниця)</label>
         <input type="text" id="speaker" placeholder="наприклад: denys"
-               pattern="[a-z0-9_\-]{1,32}" title="тільки a-z, 0-9, _ -">
+               pattern="[a-z0-9_\-]{1,32}" title="a-z, 0-9, _ -">
       </div>
+    </section>
 
+    <section class="card">
+      <h2>2. Запис з мікрофона</h2>
+      <p class="hint">
+        Натисніть «Запис» → говоріть 3–10 сек → натисніть «Стоп».
+        Далі «Перевірити запис» або «Зберегти», якщо погано — «Видалити».
+      </p>
+      <div class="rec-row">
+        <button type="button" class="btn danger" id="btn-rec">🔴 Запис</button>
+        <span id="rec-status" class="hint">Готовий до запису</span>
+      </div>
+      <audio id="rec-preview" controls class="hidden rec-audio"></audio>
+      <div class="rec-actions hidden" id="rec-actions">
+        <button type="button" class="btn secondary" id="btn-rec-check">Перевірити запис</button>
+        <button type="button" class="btn primary" id="btn-rec-save">Зберегти зразок</button>
+        <button type="button" class="btn" id="btn-rec-discard">Видалити</button>
+      </div>
+      <p id="rec-check-result" class="hint"></p>
+    </section>
+
+    <section class="card">
+      <h2>3. Завантажити файли з диска</h2>
+      <p class="hint">.wav / .flac / .ogg / .mp3 — альтернатива запису з мікрофона.</p>
       <div class="dropzone" id="dropzone">
         <input type="file" id="files" multiple accept=".wav,.flac,.ogg,.mp3,audio/*">
         <p>Перетягніть файли сюди або <span class="link">виберіть</span></p>
         <ul id="file-list"></ul>
       </div>
-
-      <button type="button" class="btn primary" id="btn-upload">Завантажити</button>
+      <button type="button" class="btn primary" id="btn-upload">Завантажити файли</button>
     </section>
 
     <section class="card">
-      <h2>2. Зразки для enrollment</h2>
+      <h2>4. Зразки</h2>
+      <p class="hint">Можна перевірити всі та видалити погані перед enrollment.</p>
+      <div class="row-btns">
+        <button type="button" class="btn secondary" id="btn-check-all">Перевірити всі зразки</button>
+      </div>
+      <div id="quality-box" class="hidden"></div>
       <div id="enrollment-list"><p class="empty">Завантаження…</p></div>
     </section>
 
     <section class="card">
-      <h2>3. Запустити enrollment</h2>
-      <p class="hint">Обчислює voiceprint і зберігає в <code>/data/voiceprints/</code>.</p>
+      <h2>5. Enrollment</h2>
+      <p class="hint">
+        Після 3–5 нормальних зразків натисніть enrollment.
+        Потім обов’язково Restart.
+      </p>
       <div class="field">
         <label for="enroll-speaker">Ім'я спікера</label>
         <div class="field row">
-          <input type="text" id="enroll-speaker" placeholder="ім'я спікера" pattern="[a-z0-9_\-]{1,32}">
+          <input type="text" id="enroll-speaker" placeholder="ім'я" pattern="[a-z0-9_\-]{1,32}">
           <button type="button" class="btn primary" id="btn-enroll">▶ Запустити enrollment</button>
         </div>
       </div>
@@ -69,20 +92,13 @@
     </section>
 
     <section class="card">
-      <h2>4. Зареєстровані голоси (voiceprints)</h2>
+      <h2>6. Зареєстровані голоси</h2>
       <div id="voiceprint-list"><p class="empty">Завантаження…</p></div>
-      <p class="hint warn">⚠ Після зміни voiceprint <strong>перезапустіть аддон</strong>.</p>
     </section>
 
     <footer>
-      <p>
-        Після enrollment: Wyoming Protocol → порт <strong>10350</strong>
-        → Speech-to-Text у Voice Assistant pipeline.
-      </p>
-      <p class="hint">
-        Якщо транскрипт «чує не те» — це налаштування STT (мова, модель),
-        а не пороги верифікації голосу.
-      </p>
+      <p>Wyoming Protocol → порт <strong>10350</strong> → Speech-to-Text у pipeline.</p>
+      <p class="hint">Режим «будь-який голос»: Configuration → вимкніть «Вимагати збіг голосу».</p>
     </footer>
   </div>
   <script src="static/app.js"></script>
