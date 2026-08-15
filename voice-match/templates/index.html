@@ -10,95 +10,88 @@
   <div class="container">
     <header>
       <h1>🎤 Voice Match</h1>
-      <p class="subtitle">Запис голосу, перевірка зразків, enrollment</p>
+      <p class="subtitle">Запис WAV · перевірка якості · enrollment</p>
     </header>
 
     <div id="flash-box"></div>
     <div id="restart-banner" class="banner warn hidden">
-      <span>⚠ Voiceprint оновлено — потрібен перезапуск аддона.</span>
+      <span>⚠ Voiceprint оновлено — потрібен Restart.</span>
       <button type="button" class="btn primary" id="btn-restart">🔄 Restart аддона</button>
     </div>
 
     <section class="card">
       <h2>0. Пошук Wyoming STT</h2>
       <p class="hint">Поточний upstream: <code id="current-upstream">—</code></p>
-      <button type="button" class="btn secondary" id="btn-scan">🔍 Сканувати Wyoming STT</button>
+      <button type="button" class="btn secondary" id="btn-scan">🔍 Сканувати</button>
       <div id="scan-results" class="scan-results hidden"></div>
     </section>
 
     <section class="card">
-      <h2>1. Ім'я спікера</h2>
+      <h2>1. Спікер</h2>
       <div class="field">
-        <label for="speaker">Ім'я (латиниця)</label>
+        <label for="speaker-select">Існуючий спікер</label>
+        <select id="speaker-select">
+          <option value="">— новий / обрати —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="speaker">Або нове ім'я (латиниця)</label>
         <input type="text" id="speaker" placeholder="наприклад: denys"
-               pattern="[a-z0-9_\-]{1,32}" title="a-z, 0-9, _ -">
+               pattern="[a-z0-9_\-]{1,32}">
       </div>
     </section>
 
     <section class="card">
-      <h2>2. Запис з мікрофона</h2>
-      <p class="hint">
-        Натисніть «Запис» → говоріть 3–10 сек → натисніть «Стоп».
-        Далі «Перевірити запис» або «Зберегти», якщо погано — «Видалити».
-      </p>
+      <h2>2. Запис з мікрофона → WAV</h2>
+      <p class="hint">Запис → Стоп → Перевірити (тривалість, гучність, …) → Зберегти або Видалити.</p>
       <div class="rec-row">
         <button type="button" class="btn danger" id="btn-rec">🔴 Запис</button>
-        <span id="rec-status" class="hint">Готовий до запису</span>
+        <span id="rec-status" class="hint">Готовий</span>
       </div>
       <audio id="rec-preview" controls class="hidden rec-audio"></audio>
       <div class="rec-actions hidden" id="rec-actions">
-        <button type="button" class="btn secondary" id="btn-rec-check">Перевірити запис</button>
-        <button type="button" class="btn primary" id="btn-rec-save">Зберегти зразок</button>
+        <button type="button" class="btn secondary" id="btn-rec-check">Перевірити</button>
+        <button type="button" class="btn primary" id="btn-rec-save">Зберегти як WAV</button>
         <button type="button" class="btn" id="btn-rec-discard">Видалити</button>
       </div>
       <p id="rec-check-result" class="hint"></p>
     </section>
 
     <section class="card">
-      <h2>3. Завантажити файли з диска</h2>
-      <p class="hint">.wav / .flac / .ogg / .mp3 — альтернатива запису з мікрофона.</p>
+      <h2>3. Файли з диска</h2>
+      <p class="hint">Будь-який формат → на сервері конвертується в WAV 16 kHz mono.</p>
       <div class="dropzone" id="dropzone">
-        <input type="file" id="files" multiple accept=".wav,.flac,.ogg,.mp3,audio/*">
-        <p>Перетягніть файли сюди або <span class="link">виберіть</span></p>
+        <input type="file" id="files" multiple accept="audio/*,.wav,.flac,.ogg,.mp3,.webm">
+        <p>Перетягніть або <span class="link">виберіть</span></p>
         <ul id="file-list"></ul>
       </div>
-      <button type="button" class="btn primary" id="btn-upload">Завантажити файли</button>
+      <button type="button" class="btn primary" id="btn-upload">Завантажити</button>
     </section>
 
     <section class="card">
       <h2>4. Зразки</h2>
-      <p class="hint">Можна перевірити всі та видалити погані перед enrollment.</p>
-      <div class="row-btns">
-        <button type="button" class="btn secondary" id="btn-check-all">Перевірити всі зразки</button>
-      </div>
+      <button type="button" class="btn secondary" id="btn-check-all">Перевірити всі зразки</button>
       <div id="quality-box" class="hidden"></div>
-      <div id="enrollment-list"><p class="empty">Завантаження…</p></div>
+      <div id="enrollment-list"><p class="empty">…</p></div>
     </section>
 
     <section class="card">
       <h2>5. Enrollment</h2>
-      <p class="hint">
-        Після 3–5 нормальних зразків натисніть enrollment.
-        Потім обов’язково Restart.
-      </p>
-      <div class="field">
-        <label for="enroll-speaker">Ім'я спікера</label>
-        <div class="field row">
-          <input type="text" id="enroll-speaker" placeholder="ім'я" pattern="[a-z0-9_\-]{1,32}">
-          <button type="button" class="btn primary" id="btn-enroll">▶ Запустити enrollment</button>
-        </div>
+      <p class="hint">Після 3–5 OK-зразків → enrollment → Restart.</p>
+      <div class="field row">
+        <input type="text" id="enroll-speaker" placeholder="спікер" pattern="[a-z0-9_\-]{1,32}">
+        <button type="button" class="btn primary" id="btn-enroll">▶ Enrollment</button>
       </div>
       <pre id="enroll-log" class="log hidden"></pre>
     </section>
 
     <section class="card">
-      <h2>6. Зареєстровані голоси</h2>
-      <div id="voiceprint-list"><p class="empty">Завантаження…</p></div>
+      <h2>6. Voiceprints</h2>
+      <div id="voiceprint-list"><p class="empty">…</p></div>
     </section>
 
     <footer>
-      <p>Wyoming Protocol → порт <strong>10350</strong> → Speech-to-Text у pipeline.</p>
-      <p class="hint">Режим «будь-який голос»: Configuration → вимкніть «Вимагати збіг голосу».</p>
+      <p>Wyoming Protocol → <strong>10350</strong>. Без перевірки голосу: вимкніть «Вимагати збіг голосу».</p>
     </footer>
   </div>
   <script src="static/app.js"></script>
