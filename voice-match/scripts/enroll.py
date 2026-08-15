@@ -1,1 +1,118 @@
-"""Enrollment script — generate a voiceprint from WAV samples.\n\nUsage:\n    python -m scripts.enroll --speaker juan [--enrollment-dir /data/enrollment]\n    python -m scripts.enroll --speaker maria\n    python -m scripts.enroll --list\n\nPlace 16kHz mono WAV files in data/enrollment/<speaker_name>/, then run this\nscript to compute an averaged speaker embedding (voiceprint).\n"""\n\nimport argparse\nimport logging\nimport os\nimport sys\nfrom pathlib import Path\n\nimport numpy as np\nimport torch\nimport soundfile as sf\nimport torchaudio\nfrom speechbrain.inference.speaker import EncoderClassifier\n\nlogging.basicConfig(\n    level=logging.INFO,\n    format=\"%(asctime)s %(levelname)s [%(name)s] %(message)s\",\n    datefmt=\"%Y-%m-%d %H:%M:%S\",\n)\n_LOGGER = logging.getLogger(__name__)\n\nSUPPORTED_EXTENSIONS = {\".wav\", \".flac\", \".ogg\", \".mp3\"}\n\n\ndef main() -> None:\n    parser = argparse.ArgumentParser(\n        description=\"Enroll speaker voice samples to create a voiceprint\"\n    )\n    parser.add_argument(\n        \"--speaker\",\n        help=\"Name of the speaker to enroll\",\n    )\n    parser.add_argument(\n        \"--list\",\n        action=\"store_true\",\n        help=\"List all enrolled speakers\",\n    )\n    parser.add_argument(\n        \"--delete\",\n        metavar=\"NAME\",\n        help=\"Delete a speaker voiceprint\",\n    )\n    parser.add_argument(\n        \"--enrollment-dir\",\n        default=os.environ.get(\"ENROLLMENT_DIR\", \"/data/enrollment\"),\n        help=\"Directory containing enrollment samples\",\n    )\n    parser.add_argument(\n        \"--voiceprints-dir\",\n        default=os.environ.get(\"VOICEPRINTS_DIR\", \"/data/voiceprints\"),\n        help=\"Directory to store voiceprint .npy files\",\n    )\n    parser.add_argument(\n        \"--model-dir\",\n        default=os.environ.get(\"MODEL_DIR\", \"/data/models\"),\n        help=\"Directory to cache the speaker model\",\n    )\n    parser.add_argument(\n        \"--device\",\n        default=os.environ.get(\"DEVICE\", \"cpu\"),\n        choices=[\"cuda\", \"cpu\"],\n        help=\"Inference device\",\n    )\n    args = parser.parse_args()\n\n    if args.list:\n        vp_dir = Path(args.voiceprints_dir)\n        if vp_dir.exists():\n            for f in sorted(vp_dir.glob(\"*.npy\")):\n                print(f.stem)\n        return\n\n    if args.delete:\n        vp = Path(args.voiceprints_dir) / f\"{args.delete}.npy\"\n        if vp.exists():\n            vp.unlink()\n            print(f\"Deleted {vp}\")\n        else:\n            print(f\"Not found: {vp}\")\n        return\n\n    if not args.speaker:\n        parser.error(\"--speaker is required (or use --list / --delete)\")\n\n    speaker_dir = Path(args.enrollment_dir) / args.speaker\n    if not speaker_dir.exists():\n        _LOGGER.error(\"Enrollment directory not found: %s\", speaker_dir)\n        sys.exit(1)\n\n    files = [\n        f for f in sorted(speaker_dir.iterdir())\n        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS\n    ]\n    if not files:\n        _LOGGER.error(\"No audio files found in %s\", speaker_dir)\n        sys.exit(1)\n\n    _LOGGER.info(\"Loading ECAPA-TDNN model...\")\n    device = args.device\n    if device == \"cuda\" and not torch.cuda.is_available():\n        device = \"cpu\"\n    run_opts = {\"device\": device} if device == \"cuda\" else {}\n    classifier = EncoderClassifier.from_hparams(\n        source=\"speechbrain/spkrec-ecapa-voxceleb\",\n        savedir=f\"{args.model_dir}/spkrec-ecapa-voxceleb\",\n        run_opts=run_opts,\n    )\n\n    embeddings = []\n    for audio_file in files:\n        _LOGGER.info(\"Processing %s\", audio_file.name)\n        try:\n            signal, sr = sf.read(str(audio_file), dtype=\"float32\")\n            if signal.ndim > 1:\n                signal = signal.mean(axis=1)\n            if sr != 16000:\n                signal = torchaudio.functional.resample(\n                    torch.tensor(signal).unsqueeze(0), sr, 16000\n                ).squeeze(0).numpy()\n            tensor = torch.tensor(signal).unsqueeze(0)\n            if device == \"cuda\":\n                tensor = tensor.to(\"cuda\")\n            with torch.no_grad():\n                emb = classifier.encode_batch(tensor)\n            embeddings.append(emb.squeeze().cpu().numpy())\n        except Exception as e:\n            _LOGGER.warning(\"Failed to process %s: %s\", audio_file.name, e)\n\n    if not embeddings:\n        _LOGGER.error(\"No embeddings extracted\")\n        sys.exit(1)\n\n    voiceprint = np.mean(embeddings, axis=0)\n    out_dir = Path(args.voiceprints_dir)\n    out_dir.mkdir(parents=True, exist_ok=True)\n    out_path = out_dir / f\"{args.speaker}.npy\"\n    np.save(str(out_path), voiceprint)\n    _LOGGER.info(\"Saved voiceprint: %s (shape=%s, from %d samples)\", out_path, voiceprint.shape, len(embeddings))\n\n\nif __name__ == \"__main__\":\n    main()\n
+"""Enrollment script — generate a voiceprint from WAV samples.
+
+Usage:
+    python -m scripts.enroll --speaker NAME
+    python -m scripts.enroll --list
+    python -m scripts.enroll --delete NAME
+"""
+
+import argparse
+import logging
+import os
+import sys
+from pathlib import Path
+
+import numpy as np
+import torch
+import soundfile as sf
+import torchaudio
+from speechbrain.inference.speaker import EncoderClassifier
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+_LOGGER = logging.getLogger(__name__)
+
+SUPPORTED_EXTENSIONS = {".wav", ".flac", ".ogg", ".mp3"}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Enroll speaker voice samples")
+    parser.add_argument("--speaker", help="Speaker name to enroll")
+    parser.add_argument("--list", action="store_true", help="List enrolled speakers")
+    parser.add_argument("--delete", metavar="NAME", help="Delete a voiceprint")
+    parser.add_argument("--enrollment-dir", default=os.environ.get("ENROLLMENT_DIR", "/data/enrollment"))
+    parser.add_argument("--voiceprints-dir", default=os.environ.get("VOICEPRINTS_DIR", "/data/voiceprints"))
+    parser.add_argument("--model-dir", default=os.environ.get("MODEL_DIR", "/data/models"))
+    parser.add_argument("--device", default=os.environ.get("DEVICE", "cpu"), choices=["cuda", "cpu"])
+    args = parser.parse_args()
+
+    if args.list:
+        vp_dir = Path(args.voiceprints_dir)
+        if vp_dir.exists():
+            for f in sorted(vp_dir.glob("*.npy")):
+                print(f.stem)
+        return
+
+    if args.delete:
+        vp = Path(args.voiceprints_dir) / f"{args.delete}.npy"
+        if vp.exists():
+            vp.unlink()
+            print(f"Deleted {vp}")
+        else:
+            print(f"Not found: {vp}")
+        return
+
+    if not args.speaker:
+        parser.error("--speaker is required (or use --list / --delete)")
+
+    speaker_dir = Path(args.enrollment_dir) / args.speaker
+    if not speaker_dir.exists():
+        _LOGGER.error("Enrollment directory not found: %s", speaker_dir)
+        sys.exit(1)
+
+    files = [
+        f for f in sorted(speaker_dir.iterdir())
+        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS
+    ]
+    if not files:
+        _LOGGER.error("No audio files found in %s", speaker_dir)
+        sys.exit(1)
+
+    _LOGGER.info("Loading ECAPA-TDNN model...")
+    device = args.device
+    if device == "cuda" and not torch.cuda.is_available():
+        device = "cpu"
+    run_opts = {"device": device} if device == "cuda" else {}
+    classifier = EncoderClassifier.from_hparams(
+        source="speechbrain/spkrec-ecapa-voxceleb",
+        savedir=f"{args.model_dir}/spkrec-ecapa-voxceleb",
+        run_opts=run_opts,
+    )
+
+    embeddings = []
+    for audio_file in files:
+        _LOGGER.info("Processing %s", audio_file.name)
+        try:
+            signal, sr = sf.read(str(audio_file), dtype="float32")
+            if signal.ndim > 1:
+                signal = signal.mean(axis=1)
+            if sr != 16000:
+                signal = torchaudio.functional.resample(
+                    torch.tensor(signal).unsqueeze(0), sr, 16000
+                ).squeeze(0).numpy()
+            tensor = torch.tensor(signal).unsqueeze(0)
+            if device == "cuda":
+                tensor = tensor.to("cuda")
+            with torch.no_grad():
+                emb = classifier.encode_batch(tensor)
+            embeddings.append(emb.squeeze().cpu().numpy())
+        except Exception as e:
+            _LOGGER.warning("Failed to process %s: %s", audio_file.name, e)
+
+    if not embeddings:
+        _LOGGER.error("No embeddings extracted")
+        sys.exit(1)
+
+    voiceprint = np.mean(embeddings, axis=0)
+    out_dir = Path(args.voiceprints_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{args.speaker}.npy"
+    np.save(str(out_path), voiceprint)
+    _LOGGER.info("Saved voiceprint: %s (shape=%s, from %d samples)", out_path, voiceprint.shape, len(embeddings))
+
+
+if __name__ == "__main__":
+    main()
