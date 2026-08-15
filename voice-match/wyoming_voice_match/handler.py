@@ -22,18 +22,11 @@ from .verify import SpeakerVerifier, VerificationResult
 
 _LOGGER = logging.getLogger("handler")
 
-# Lock to prevent concurrent model inference
 _MODEL_LOCK = asyncio.Lock()
 
 
 class SpeakerVerifyHandler(AsyncEventHandler):
-    """Wyoming ASR handler that gates transcription on speaker identity.
-
-    Runs speaker verification early (as soon as enough audio is buffered).
-    Once verified, waits for the full audio stream, then uses voiceprint-based
-    speaker extraction to isolate the enrolled speaker's voice from background
-    noise (TV, radio, other people) before forwarding to ASR.
-    """
+    """Wyoming ASR handler that gates transcription on speaker identity."""
 
     def __init__(
         self,
@@ -47,7 +40,6 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-
         self.wyoming_info = wyoming_info
         self.verifier = verifier
         self.upstream_uri = upstream_uri
@@ -55,8 +47,6 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         self.require_speaker_match = require_speaker_match
         self.save_rejected = save_rejected
         self.rejected_dir = Path("/data/rejections")
-
-        # Per-connection state
         self._audio_buffer = bytes()
         self._audio_rate: int = 16000
         self._audio_width: int = 2
@@ -70,21 +60,13 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         self._audio_stopped = asyncio.Event()
 
     async def handle_event(self, event: Event) -> bool:
-        """Process a single Wyoming event."""
         sid = self._session_id
-
-        # Service discovery
         if Describe.is_type(event.type):
             await self.write_event(self.wyoming_info.event())
             return True
-
-        # Transcription request — capture language preference
         if Transcribe.is_type(event.type):
-            transcribe = Transcribe.from_event(event)
-            self._language = transcribe.language
+            self._language = Transcribe.from_event(event).language
             return True
-
-        # Audio stream start — reset state
         if AudioStart.is_type(event.type):
             self._audio_buffer = bytes()
             self._verify_task = None
@@ -92,121 +74,67 @@ class SpeakerVerifyHandler(AsyncEventHandler):
             self._responded = False
             self._audio_stopped = asyncio.Event()
             self._stream_start_time = time.monotonic()
-            _LOGGER.info("[%s] ── New audio session started ──", sid)
+            self._verify_result_cache = None
+            _LOGGER.info("[%s] -- New audio session started --", sid)
             return True
-
-        # Audio data — accumulate and trigger early verification + ASR
         if AudioChunk.is_type(event.type):
             chunk = AudioChunk.from_event(event)
             self._audio_rate = chunk.rate
             self._audio_width = chunk.width
             self._audio_channels = chunk.channels
             self._audio_buffer += chunk.audio
-
-            # Trigger verification once we have enough audio
             if not self._verify_started and not self._responded:
-                bytes_per_second = (
-                    self._audio_rate * self._audio_width * self._audio_channels
-                )
-                buffered_seconds = len(self._audio_buffer) / bytes_per_second
-
+                bps = self._audio_rate * self._audio_width * self._audio_channels
+                buffered_seconds = len(self._audio_buffer) / bps if bps else 0
                 if buffered_seconds >= self.verifier.max_verify_seconds:
                     self._verify_started = True
-                    _LOGGER.debug(
-                        "[%s] Early verify: %.1fs buffered, starting verification",
-                        sid, buffered_seconds,
-                    )
-                    # Take a snapshot of the buffer for verification
                     verify_audio = bytes(self._audio_buffer)
                     self._verify_task = asyncio.create_task(
                         self._run_early_pipeline(verify_audio)
                     )
-
             return True
-
-        # Audio stream end — respond if we haven't already
         if AudioStop.is_type(event.type):
             self._audio_stopped.set()
             if self._responded:
-                # Already sent response during streaming
-                elapsed = self._elapsed_ms()
-                _LOGGER.debug(
-                    "[%s] AudioStop received (already responded, %.0fms since start)",
-                    sid, elapsed,
-                )
                 return True
-
-            # Verify and forward (handles both required and optional matching)
             await self._process_audio_sync()
             return True
-
         return True
 
     async def _run_early_pipeline(self, verify_audio: bytes) -> None:
-        """Run verification and, if matched, immediately forward to ASR."""
         sid = self._session_id
-
-        # Run speaker verification
         async with _MODEL_LOCK:
             loop = asyncio.get_running_loop()
             verify_start = time.monotonic()
             result = await loop.run_in_executor(
-                None,
-                self.verifier.verify,
-                verify_audio,
-                self._audio_rate,
+                None, self.verifier.verify, verify_audio, self._audio_rate
             )
             verify_ms = (time.monotonic() - verify_start) * 1000
 
         if not result.is_match:
-            # Don't respond yet — wait for AudioStop in case more audio
-            # changes the outcome (handled in _process_audio_sync)
-            _LOGGER.debug(
-                "[%s] Early verify rejected (%.4f), waiting for AudioStop",
-                sid, result.similarity,
-            )
+            _LOGGER.debug("[%s] Early verify rejected (%.4f)", sid, result.similarity)
             self._verify_result_cache = result
             return
 
         _LOGGER.info(
-            "[%s] Speaker verified: %s (similarity=%.4f, threshold=%.2f), "
-            "forwarding to ASR immediately",
-            sid, result.matched_speaker, result.similarity, result.threshold,
+            "[%s] Speaker verified: %s (similarity=%.4f)",
+            sid, result.matched_speaker, result.similarity,
         )
-        if _LOGGER.isEnabledFor(logging.DEBUG):
-            for name, score in result.all_scores.items():
-                _LOGGER.debug("[%s]   All scores — %s: %.4f", sid, name, score)
-
-        # Mark as responded immediately so AudioStop handler doesn't
-        # trigger _process_audio_sync while we're waiting for the command
         self._responded = True
+        bps = self._audio_rate * self._audio_width * self._audio_channels
 
-        bytes_per_second = (
-            self._audio_rate * self._audio_width * self._audio_channels
-        )
-
-        # Wait until the satellite sends AudioStop (stream fully ended).
-        # This ensures we capture the entire command regardless of length.
-        _LOGGER.debug("[%s] Waiting for AudioStop", sid)
         try:
             await asyncio.wait_for(self._audio_stopped.wait(), timeout=30.0)
         except asyncio.TimeoutError:
             _LOGGER.debug("[%s] AudioStop timeout (30s)", sid)
-        full_buffer = bytes(self._audio_buffer)
-            buffer_duration = len(full_buffer) / bytes_per_second
-            _LOGGER.debug("[%s] Stream ended: %.1fs buffer", sid, buffer_duration)
 
-        # Extract only the verified speaker's audio segments using
-        # voiceprint comparison. This removes TV/radio/other speakers
-        # by keeping only segments that match the enrolled voice.
+        full_buffer = bytes(self._audio_buffer)
+        buffer_duration = len(full_buffer) / bps if bps else 0
+        _LOGGER.debug("[%s] Stream ended: %.1fs buffer", sid, buffer_duration)
 
         speaker_name = result.matched_speaker
         extract_ms = 0.0
         if speaker_name:
-            _LOGGER.debug(
-                "[%s] Extracting speaker '%s' audio from %.1fs buffer",
-                sid, speaker_name, buffer_duration,
-            )
             async with _MODEL_LOCK:
                 loop = asyncio.get_running_loop()
                 extract_start = time.monotonic()
@@ -221,92 +149,44 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         else:
             forward_audio = full_buffer
 
-        asr_duration = len(forward_audio) / bytes_per_second
-        _LOGGER.debug("[%s] Forwarding %.1fs to ASR", sid, asr_duration)
-
-        # Forward to ASR and respond immediately
+        asr_duration = len(forward_audio) / bps if bps else 0
         asr_start = time.monotonic()
         transcript = await self._forward_to_upstream(forward_audio)
         asr_ms = (time.monotonic() - asr_start) * 1000
         tagged = self._tag_transcript(transcript, speaker_name)
         await self.write_event(Transcript(text=tagged).event())
         self._responded = True
-
         self._log_pipeline_summary(
-            tagged, verify_ms, extract_ms, asr_ms,
-            buffer_duration, asr_duration,
+            tagged, verify_ms, extract_ms, asr_ms, buffer_duration, asr_duration
         )
 
     async def _process_audio_sync(self) -> None:
-        """Fallback: verify and forward when AudioStop arrives (short audio)."""
         sid = self._session_id
         audio_bytes = self._audio_buffer
-        bytes_per_second = (
-            self._audio_rate * self._audio_width * self._audio_channels
-        )
-        audio_duration = len(audio_bytes) / bytes_per_second
+        bps = self._audio_rate * self._audio_width * self._audio_channels
+        audio_duration = len(audio_bytes) / bps if bps else 0
 
         if len(audio_bytes) == 0:
-            _LOGGER.debug("[%s] Empty audio buffer, returning empty transcript", sid)
             await self.write_event(Transcript(text="").event())
             return
 
-        stream_elapsed = self._elapsed_ms()
-        _LOGGER.debug(
-            "[%s] AudioStop received: %.1fs of audio (%d bytes), "
-            "stream duration: %.0fms",
-            sid, audio_duration, len(audio_bytes), stream_elapsed,
-        )
+        cached = getattr(self, "_verify_result_cache", None)
+        async with _MODEL_LOCK:
+            loop = asyncio.get_running_loop()
+            verify_start = time.monotonic()
+            result = await loop.run_in_executor(
+                None, self.verifier.verify, audio_bytes, self._audio_rate
+            )
+            verify_ms = (time.monotonic() - verify_start) * 1000
 
-        # Check if early verification ran but was rejected
-        cached = getattr(self, '_verify_result_cache', None)
-        if cached is not None:
-            # Early verify rejected — try full audio now
-            _LOGGER.debug(
-                "[%s] Re-verifying with full %.1fs audio",
-                sid, audio_duration,
-            )
-            async with _MODEL_LOCK:
-                loop = asyncio.get_running_loop()
-                verify_start = time.monotonic()
-                result = await loop.run_in_executor(
-                    None,
-                    self.verifier.verify,
-                    audio_bytes,
-                    self._audio_rate,
-                )
-                verify_ms = (time.monotonic() - verify_start) * 1000
-            # Use best of early and full
-            if cached.similarity > result.similarity:
-                result = cached
-        else:
-            # No early verification was triggered — verify now
-            _LOGGER.debug(
-                "[%s] No early verification (only %.1fs buffered), verifying now",
-                sid, audio_duration,
-            )
-            async with _MODEL_LOCK:
-                loop = asyncio.get_running_loop()
-                verify_start = time.monotonic()
-                result = await loop.run_in_executor(
-                    None,
-                    self.verifier.verify,
-                    audio_bytes,
-                    self._audio_rate,
-                )
-                verify_ms = (time.monotonic() - verify_start) * 1000
+        if cached is not None and cached.similarity > result.similarity:
+            result = cached
 
         if result.is_match:
             _LOGGER.info(
-                "[%s] Speaker verified: %s (similarity=%.4f, threshold=%.2f), "
-                "forwarding to ASR",
-                sid, result.matched_speaker, result.similarity, result.threshold,
+                "[%s] Speaker verified: %s (%.4f)",
+                sid, result.matched_speaker, result.similarity,
             )
-            if _LOGGER.isEnabledFor(logging.DEBUG):
-                for name, score in result.all_scores.items():
-                    _LOGGER.debug("[%s]   All scores — %s: %.4f", sid, name, score)
-
-            # Extract speaker audio to remove background noise
             asr_audio = audio_bytes
             extract_ms = 0.0
             if result.matched_speaker and audio_duration > 3.0:
@@ -322,12 +202,7 @@ class SpeakerVerifyHandler(AsyncEventHandler):
                     )
                     extract_ms = (time.monotonic() - extract_start) * 1000
 
-            asr_forwarded = len(asr_audio) / bytes_per_second
-            _LOGGER.debug(
-                "[%s] Forwarding %.1fs to ASR",
-                sid, asr_forwarded,
-            )
-
+            asr_forwarded = len(asr_audio) / bps if bps else 0
             asr_start = time.monotonic()
             transcript = await self._forward_to_upstream(asr_audio)
             asr_ms = (time.monotonic() - asr_start) * 1000
@@ -335,108 +210,48 @@ class SpeakerVerifyHandler(AsyncEventHandler):
             await self.write_event(Transcript(text=tagged).event())
             self._responded = True
             self._log_pipeline_summary(
-                tagged, verify_ms, extract_ms, asr_ms,
-                audio_duration, asr_forwarded,
+                tagged, verify_ms, extract_ms, asr_ms, audio_duration, asr_forwarded
             )
         else:
-            # Save rejected audio if enabled
-            self._save_rejected_audio(audio_bytes, result, verify_ms)
-
+            self._save_rejected_audio(audio_bytes, result)
             if not self.require_speaker_match:
-                # Speaker not matched but matching not required —
-                # forward full audio without extraction
-                asr_forwarded = len(audio_bytes) / bytes_per_second
-                _LOGGER.debug(
-                    "[%s] Speaker not matched (best=%.4f), forwarding %.1fs unmodified",
-                    sid, result.similarity, asr_forwarded,
-                )
-                asr_start = time.monotonic()
                 transcript = await self._forward_to_upstream(audio_bytes)
-                asr_ms = (time.monotonic() - asr_start) * 1000
                 await self.write_event(Transcript(text=transcript).event())
                 self._responded = True
-                self._log_pipeline_summary(
-                    transcript, verify_ms, 0.0, asr_ms,
-                    audio_duration, asr_forwarded,
-                )
             else:
-                total_elapsed = self._elapsed_ms()
                 _LOGGER.info(
-                    "[%s] ── Pipeline Summary ──\n"
-                    "  Step           Duration\n"
-                    "  ─────────────  ────────\n"
-                    "  Verify         %7.0fms\n"
-                    "  Total          %7.0fms\n"
-                    "\n"
-                    "  Result: REJECTED (best=%.4f, threshold=%.2f)\n"
-                    "  Scores: %s",
-                    sid, verify_ms, total_elapsed,
-                    result.similarity, result.threshold,
-                    ", ".join(f"{n}={s:.4f}" for n, s in result.all_scores.items()),
+                    "[%s] REJECTED (best=%.4f, threshold=%.2f)",
+                    sid, result.similarity, result.threshold,
                 )
                 await self.write_event(Transcript(text="").event())
                 self._responded = True
 
-    def _save_rejected_audio(
-        self,
-        audio_bytes: bytes,
-        result: VerificationResult,
-        verify_ms: float,
-    ) -> None:
-        """Save rejected audio as WAV with a companion JSON metadata file."""
+    def _save_rejected_audio(self, audio_bytes: bytes, result: VerificationResult) -> None:
         if not self.save_rejected:
             return
-
-        sid = self._session_id
         try:
             self.rejected_dir.mkdir(parents=True, exist_ok=True)
-
             now = datetime.now(timezone.utc)
-            timestamp = now.strftime("%Y%m%d_%H%M%S")
-            base_name = f"rejected_{timestamp}_{sid}"
-
-            # Save WAV
-            wav_path = self.rejected_dir / f"{base_name}.wav"
-            wav_buffer = io.BytesIO()
-            with wave.open(wav_buffer, "wb") as wf:
+            base = f"rejected_{now.strftime('%Y%m%d_%H%M%S')}_{self._session_id}"
+            wav_path = self.rejected_dir / f"{base}.wav"
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as wf:
                 wf.setnchannels(self._audio_channels)
                 wf.setsampwidth(self._audio_width)
                 wf.setframerate(self._audio_rate)
                 wf.writeframes(audio_bytes)
-            wav_path.write_bytes(wav_buffer.getvalue())
-
-            # Save companion JSON
-            bytes_per_second = (
-                self._audio_rate * self._audio_width * self._audio_channels
-            )
-            metadata = {
+            wav_path.write_bytes(buf.getvalue())
+            meta = {
                 "timestamp": now.isoformat(),
-                "session_id": sid,
-                "audio_file": f"{base_name}.wav",
-                "duration_seconds": round(len(audio_bytes) / bytes_per_second, 2),
-                "sample_rate": self._audio_rate,
                 "best_score": round(result.similarity, 4),
                 "threshold": round(result.threshold, 2),
-                "margin": round(result.threshold - result.similarity, 4),
-                "all_scores": {
-                    name: round(score, 4)
-                    for name, score in result.all_scores.items()
-                },
-                "speech_start_sec": result.speech_start_sec,
-                "speech_end_sec": result.speech_end_sec,
+                "all_scores": {k: round(v, 4) for k, v in result.all_scores.items()},
             }
-            json_path = self.rejected_dir / f"{base_name}.json"
-            json_path.write_text(json.dumps(metadata, indent=2))
-
-            _LOGGER.info(
-                "[%s] Saved rejected audio to %s (%.4f < %.2f)",
-                sid, wav_path, result.similarity, result.threshold,
-            )
+            (self.rejected_dir / f"{base}.json").write_text(json.dumps(meta, indent=2))
         except Exception:
-            _LOGGER.exception("[%s] Failed to save rejected audio", sid)
+            _LOGGER.exception("[%s] Failed to save rejected audio", self._session_id)
 
     def _tag_transcript(self, transcript: str, speaker_name: Optional[str]) -> str:
-        """Prepend [speaker_name] to transcript if tagging is enabled."""
         if self.tag_speaker and speaker_name and transcript:
             return f"[{speaker_name}] {transcript}"
         return transcript
@@ -450,50 +265,21 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         input_duration: float = 0.0,
         output_duration: float = 0.0,
     ) -> None:
-        """Log a formatted pipeline summary table."""
-        sid = self._session_id
         total_ms = self._elapsed_ms()
-
-        if input_duration > 0 and output_duration < input_duration:
-            discarded = input_duration - output_duration
-            discarded_pct = (discarded / input_duration) * 100
-            extract_line = (
-                f"  Extract        {extract_ms:7.0f}ms  "
-                f"({input_duration:.1f}s → {output_duration:.1f}s, "
-                f"{discarded_pct:.0f}% discarded)"
-            )
-        else:
-            extract_line = f"  Extract        {extract_ms:7.0f}ms"
-
         _LOGGER.info(
-            "[%s] ── Pipeline Summary ──\n"
-            "  Step           Duration\n"
-            "  ─────────────  ────────\n"
-            "  Verify         %7.0fms\n"
-            "%s\n"
-            "  ASR            %7.0fms\n"
-            "  Total          %7.0fms\n"
-            "\n"
-            "  Transcript: \"%s\"",
-            sid, verify_ms, extract_line, asr_ms, total_ms, transcript,
+            "[%s] Pipeline: verify=%.0fms extract=%.0fms asr=%.0fms total=%.0fms | %s",
+            self._session_id, verify_ms, extract_ms, asr_ms, total_ms, transcript[:80],
         )
 
     def _elapsed_ms(self) -> float:
-        """Milliseconds since stream start."""
         if self._stream_start_time is not None:
             return (time.monotonic() - self._stream_start_time) * 1000
         return 0.0
 
     async def _forward_to_upstream(self, audio_bytes: bytes) -> str:
-        """Forward verified audio to the upstream ASR service."""
         try:
             async with AsyncClient.from_uri(self.upstream_uri) as client:
-                # Send transcription request
-                await client.write_event(
-                    Transcribe(language=self._language).event()
-                )
-
-                # Send audio start
+                await client.write_event(Transcribe(language=self._language).event())
                 await client.write_event(
                     AudioStart(
                         rate=self._audio_rate,
@@ -501,36 +287,25 @@ class SpeakerVerifyHandler(AsyncEventHandler):
                         channels=self._audio_channels,
                     ).event()
                 )
-
-                # Stream audio in chunks (100ms per chunk)
-                bytes_per_chunk = (
-                    self._audio_rate * self._audio_width * self._audio_channels
-                ) // 10
-                for offset in range(0, len(audio_bytes), bytes_per_chunk):
-                    chunk_data = audio_bytes[offset : offset + bytes_per_chunk]
+                chunk_size = max(
+                    (self._audio_rate * self._audio_width * self._audio_channels) // 10, 320
+                )
+                for offset in range(0, len(audio_bytes), chunk_size):
                     await client.write_event(
                         AudioChunk(
-                            audio=chunk_data,
+                            audio=audio_bytes[offset : offset + chunk_size],
                             rate=self._audio_rate,
                             width=self._audio_width,
                             channels=self._audio_channels,
                         ).event()
                     )
-
-                # Signal end of audio
                 await client.write_event(AudioStop().event())
-
-                # Wait for transcript response
                 while True:
                     response = await client.read_event()
                     if response is None:
-                        _LOGGER.error("Upstream ASR closed connection unexpectedly")
                         return ""
                     if Transcript.is_type(response.type):
-                        transcript = Transcript.from_event(response)
-                        _LOGGER.debug("[%s] Upstream transcript: %s", self._session_id, transcript.text)
-                        return transcript.text
-
+                        return Transcript.from_event(response).text
         except Exception:
-            _LOGGER.exception("Error communicating with upstream ASR at %s", self.upstream_uri)
+            _LOGGER.exception("Upstream ASR error at %s", self.upstream_uri)
             return ""
