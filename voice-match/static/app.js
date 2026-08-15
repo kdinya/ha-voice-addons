@@ -251,17 +251,86 @@
     }
   });
 
+  function setRestartStatus(msg, type) {
+    var el = $("restart-status");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.classList.remove("warn");
+    if (type === "warn") el.classList.add("warn");
+    if (type === "ok") el.style.color = "var(--success)";
+    else if (type === "err") el.style.color = "var(--danger)";
+    else el.style.color = "";
+  }
+
   $("btn-restart").addEventListener("click", async function () {
     if (pendingEnrollment && !confirm("Є збережені зразки без Enrollment. Все одно перезапустити аддон?")) {
       return;
     }
+    var btn = $("btn-restart");
+    btn.disabled = true;
+    var prev = btn.textContent;
+    btn.textContent = "⏳ Перезапуск…";
+    setRestartStatus("Надсилаємо команду Restart у Supervisor…");
     try {
       var res = await fetch("./api/restart", { method: "POST" });
       var data = await res.json();
-      flash(data.message || "", data.ok ? "success" : "error");
-      if (data.ok) setNeedsRestart(false);
+      if (data.ok) {
+        setNeedsRestart(false);
+        setRestartStatus("✓ " + (data.message || "Restart надіслано. Зачекайте 5–15 с — сторінка може оновитися сама."), "ok");
+        flash(data.message || "Restart надіслано", "success");
+      } else {
+        setRestartStatus("✗ " + (data.message || "Не вдалося"), "err");
+        flash(data.message || "Помилка Restart", "error");
+      }
     } catch (e) {
+      setRestartStatus("✗ Авто-restart не вдався. Відкрийте сторінку аддона.", "err");
       flash("Авто-restart не вдався. Відкрийте сторінку аддона і натисніть Restart. " + e, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+    }
+  });
+
+  $("btn-addon-page").addEventListener("click", async function () {
+    setRestartStatus("Шукаємо адресу сторінки аддона…");
+    var paths = [
+      "/config/app/voice_match/info",
+      "/hassio/addon/voice_match/info",
+    ];
+    try {
+      var res = await fetch("./api/addon_info");
+      var data = await res.json();
+      if (data.paths && data.paths.length) paths = data.paths.concat(paths);
+      if (data.slug) {
+        paths.unshift("/config/app/" + data.slug + "/info");
+        paths.unshift("/hassio/addon/" + data.slug + "/info");
+      }
+    } catch (e) { /* use defaults */ }
+
+    // unique preserve order
+    var seen = {}, uniq = [];
+    paths.forEach(function (p) {
+      if (!seen[p]) { seen[p] = true; uniq.push(p); }
+    });
+
+    // Prefer modern /config/app/ path first if slug looks like hash_slug
+    uniq.sort(function (a, b) {
+      var sa = a.indexOf("/config/app/") === 0 ? 0 : 1;
+      var sb = b.indexOf("/config/app/") === 0 ? 0 : 1;
+      return sa - sb;
+    });
+
+    var target = uniq[0];
+    setRestartStatus("Перехід: " + target);
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.href = target;
+      } else {
+        window.location.href = target;
+      }
+    } catch (e) {
+      // cross-origin — open in same tab via relative root
+      window.open(target, "_top");
     }
   });
 

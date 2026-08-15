@@ -1,5 +1,5 @@
 name: "Voice Match"
-version: "1.5.1"
+version: "1.5.2"
 slug: "voice_match"
 description: "Верифікація голосу для Home Assistant. Перевіряє, що говорить саме ви, прибирає фон і передає аудіо на Wyoming STT. Зручний веб-інтерфейс для запису та реєстрації голосу."
 url: "https://github.com/kdinya/ha-voice-addons"

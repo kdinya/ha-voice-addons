@@ -284,28 +284,85 @@ def _run_quality_check(speaker: str) -> dict:
     }
 
 
+def _supervisor_request(path: str, method: str = "GET", timeout: float = 10):
+    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    if not token:
+        return None, "Немає SUPERVISOR_TOKEN"
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            f"http://supervisor{path}",
+            method=method,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+        try:
+            data = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            data = {"raw": body}
+        return data, None
+    except Exception as e:
+        return None, str(e)
+
+
+def get_self_addon_info() -> dict:
+    """Resolve slug / frontend paths for this addon via Supervisor API."""
+    data, err = _supervisor_request("/addons/self/info")
+    if err or not data:
+        return {
+            "ok": False,
+            "message": err or "Не вдалося отримати info",
+            "slug": "voice_match",
+            "paths": [
+                "/config/app/voice_match/info",
+                "/hassio/addon/voice_match/info",
+            ],
+        }
+    info = data.get("data") if isinstance(data, dict) and "data" in data else data
+    if not isinstance(info, dict):
+        info = {}
+    slug = info.get("slug") or info.get("addon") or "voice_match"
+    paths = [
+        f"/config/app/{slug}/info",
+        f"/hassio/addon/{slug}/info",
+    ]
+    if "_" in slug:
+        short = slug.split("_", 1)[-1]
+        if short and short != slug:
+            paths.extend([
+                f"/config/app/{short}/info",
+                f"/hassio/addon/{short}/info",
+            ])
+    return {
+        "ok": True,
+        "slug": slug,
+        "name": info.get("name") or "Voice Match",
+        "state": info.get("state"),
+        "version": info.get("version"),
+        "paths": paths,
+        "message": "ok",
+    }
+
+
 def restart_self_addon() -> dict:
     token = os.environ.get("SUPERVISOR_TOKEN", "")
     if not token:
         return {
             "ok": False,
-            "message": "Немає Supervisor API. Restart вручну: Add-ons → Voice Match → Restart.",
+            "message": "Немає Supervisor API. Restart вручну: Settings → Add-ons → Voice Match → Restart.",
         }
-    try:
-        import urllib.request
-        req = urllib.request.Request(
-            "http://supervisor/addons/self/restart",
-            method="POST",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-        return {"ok": True, "message": "Restart надіслано. Аддон перезапускається…", "raw": body}
-    except Exception as e:
+    data, err = _supervisor_request("/addons/self/restart", method="POST", timeout=15)
+    if err:
         return {
             "ok": False,
-            "message": f"Авто-restart не вдався ({e}). Зробіть Restart на сторінці аддона.",
+            "message": f"Авто-restart не вдався ({err}). Відкрийте сторінку аддона і натисніть Restart.",
         }
+    return {
+        "ok": True,
+        "message": "Команду Restart надіслано. Аддон зараз перезапускається (UI може на кілька секунд зникнути).",
+        "raw": data,
+    }
 
 
 @app.route("/")
@@ -521,6 +578,11 @@ def api_check_quality():
 @app.route("/api/restart", methods=["POST"])
 def api_restart():
     return jsonify(restart_self_addon())
+
+
+@app.route("/api/addon_info")
+def api_addon_info():
+    return jsonify(get_self_addon_info())
 
 
 if __name__ == "__main__":
