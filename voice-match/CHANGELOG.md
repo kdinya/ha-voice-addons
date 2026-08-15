@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+- Повні версії `verify.py` та `handler.py` (з архіву)
+- Збережено hot-reload voiceprints
+
 ## 2.0.0
 - **Повністю автономний** — більше не залежить від образу jxlarrea/wyoming-voice-match
 - **Hot-reload voiceprints** — після Enrollment рестарт аддона більше НЕ потрібен
