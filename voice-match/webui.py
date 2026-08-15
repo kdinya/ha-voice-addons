@@ -445,7 +445,8 @@ def enroll():
         if ok:
             log += (
                 "\n\n✅ Voiceprint збережено.\n"
-                "⚠ Обов'язково Restart аддона (кнопка нижче)."
+                "⚠ Обов'язково Restart аддона — блок «Restart аддона» внизу сторінки "
+                "або кнопка Restart на сторінці аддона в Supervisor."
             )
         return jsonify({"ok": ok, "log": log, "need_restart": ok})
     except subprocess.TimeoutExpired:

@@ -4,13 +4,21 @@
   const speakerSelect = $("speaker-select");
   const enrollSpeaker = $("enroll-speaker");
   const flashBox = $("flash-box");
-  const restartBanner = $("restart-banner");
+  const restartHint = $("restart-hint");
 
   let mediaRecorder = null, recChunks = [], recBlob = null, recording = false;
+  let pendingEnrollment = false; // samples saved but enroll not run
+  let needsRestart = false;
 
   function flash(msg, type) {
     flashBox.innerHTML = '<div class="flash ' + type + '">' + msg + "</div>";
     setTimeout(function () { flashBox.innerHTML = ""; }, 9000);
+  }
+
+  function setNeedsRestart(v) {
+    needsRestart = !!v;
+    if (needsRestart) restartHint.classList.remove("hidden");
+    else restartHint.classList.add("hidden");
   }
 
   function currentSpeaker() {
@@ -52,6 +60,14 @@
     if (cur && list && list.indexOf(cur) >= 0) speakerSelect.value = cur;
   }
 
+  // Warn if leaving with unsaved recording or pending enrollment
+  window.addEventListener("beforeunload", function (e) {
+    if (recording || recBlob || pendingEnrollment) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+
   // files
   const fileInput = $("files"), fileList = $("file-list"), dropzone = $("dropzone");
   fileInput.addEventListener("change", function () {
@@ -84,7 +100,12 @@
       var res = await fetch("./upload", { method: "POST", body: form });
       var data = await res.json();
       flash(data.message || (data.ok ? "OK" : "Помилка"), data.ok ? "success" : "error");
-      if (data.ok) { fileInput.value = ""; fileList.innerHTML = ""; await refreshStatus(); }
+      if (data.ok) {
+        fileInput.value = "";
+        fileList.innerHTML = "";
+        pendingEnrollment = true;
+        await refreshStatus();
+      }
     } catch (e) { flash("" + e, "error"); }
   });
 
@@ -165,6 +186,7 @@
         var extra = data.analysis ? " — " + (data.analysis.note || data.analysis.quality) : "";
         flash((data.message || "Збережено") + extra, data.analysis && data.analysis.quality === "bad" ? "error" : "success");
         $("btn-rec-discard").click();
+        pendingEnrollment = true;
         await refreshStatus();
       } else flash(data.message || "Помилка", "error");
     } catch (e) { flash("" + e, "error"); }
@@ -201,7 +223,10 @@
 
   $("btn-enroll").addEventListener("click", async function () {
     var sp = (enrollSpeaker.value || currentSpeaker() || "").trim().toLowerCase();
-    if (!sp) { alert("Спікер?"); return; }
+    if (!sp) { alert("Вкажіть спікера перед Enrollment."); return; }
+    if (pendingEnrollment === false) {
+      // still allow re-enroll
+    }
     $("btn-enroll").disabled = true;
     $("enroll-log").classList.remove("hidden", "ok", "err");
     $("enroll-log").textContent = "Enrollment…\n";
@@ -212,7 +237,12 @@
       var data = await res.json();
       $("enroll-log").textContent = data.log || "";
       $("enroll-log").classList.add(data.ok ? "ok" : "err");
-      if (data.ok) { restartBanner.classList.remove("hidden"); await refreshStatus(); }
+      if (data.ok) {
+        pendingEnrollment = false;
+        setNeedsRestart(true);
+        await refreshStatus();
+        flash("Enrollment успішний. Зробіть Restart аддона (кнопка нижче).", "success");
+      }
     } catch (e) {
       $("enroll-log").textContent = "" + e;
       $("enroll-log").classList.add("err");
@@ -222,21 +252,27 @@
   });
 
   $("btn-restart").addEventListener("click", async function () {
+    if (pendingEnrollment && !confirm("Є збережені зразки без Enrollment. Все одно перезапустити аддон?")) {
+      return;
+    }
     try {
       var res = await fetch("./api/restart", { method: "POST" });
       var data = await res.json();
       flash(data.message || "", data.ok ? "success" : "error");
-    } catch (e) { flash("Restart вручну на сторінці аддона. " + e, "error"); }
+      if (data.ok) setNeedsRestart(false);
+    } catch (e) {
+      flash("Авто-restart не вдався. Відкрийте сторінку аддона і натисніть Restart. " + e, "error");
+    }
   });
 
   $("btn-scan").addEventListener("click", async function () {
     $("scan-results").classList.remove("hidden");
-    $("scan-results").innerHTML = "<p class=\"empty\">…</p>";
+    $("scan-results").innerHTML = "<p class=\"empty\">Сканування…</p>";
     try {
       var res = await fetch("./api/scan_stt");
       var data = await res.json();
       if (!data.found || !data.found.length) {
-        $("scan-results").innerHTML = "<p class=\"empty\">Нічого. Спробуйте tcp://homeassistant:10300</p>";
+        $("scan-results").innerHTML = "<p class=\"empty\">Нічого не знайдено. Спробуйте tcp://homeassistant:10300 у Configuration.</p>";
         return;
       }
       var html = "<ul class=\"scan-list\">";
@@ -244,7 +280,7 @@
         html += "<li><code class=\"uri\">" + item.uri + "</code> " +
           (item.wyoming_ok ? "✓" : "?") +
           (item.current ? ' <span class="badge current">поточний</span>' : "") +
-          ' <button type="button" class="btn small" data-copy="' + item.uri + '">Копіювати</button></li>';
+          ' <button type="button" class="btn small secondary" data-copy="' + item.uri + '">Копіювати</button></li>';
       });
       html += "</ul>";
       $("scan-results").innerHTML = html;
@@ -268,29 +304,37 @@
       renderEnrollment(data.enrollment || []);
       renderVoiceprints(data.voiceprints || []);
       if (data.upstream_uri) $("current-upstream").textContent = data.upstream_uri;
+      // if there are samples but no matching voiceprint for that speaker — pending
+      var speakersWithSamples = (data.enrollment || []).map(function (s) { return s.name; });
+      var vps = data.voiceprints || [];
+      if (speakersWithSamples.some(function (n) { return vps.indexOf(n) < 0; })) {
+        pendingEnrollment = true;
+      }
     } catch (e) { console.error(e); }
   }
 
   function renderEnrollment(list) {
     var el = $("enrollment-list");
-    if (!list.length) { el.innerHTML = '<p class="empty">Немає зразків.</p>'; return; }
+    if (!list.length) { el.innerHTML = '<p class="empty">Немає зразків. Запишіть або завантажте аудіо.</p>'; return; }
     var html = "";
     list.forEach(function (s) {
-      html += "<div class=\"speaker-block\"><strong>" + s.name + "</strong> (" + s.count + ")";
-      html += ' <button type="button" class="btn small danger" data-del-samples="' + s.name + '">Видалити всі</button><ul class="file-clean-list">';
+      html += '<div class="speaker-block">';
+      html += '<div class="speaker-head"><strong>' + s.name + '</strong> <span class="hint" style="margin:0">(' + s.count + ')</span>';
+      html += ' <button type="button" class="btn small danger" data-del-samples="' + s.name + '">🗑 Видалити всі</button></div>';
+      html += '<ul class="file-clean-list">';
       (s.files || []).forEach(function (f) {
         var name = typeof f === "string" ? f : f.name;
         var kb = typeof f === "object" && f.size_kb != null ? " (" + f.size_kb + " KB)" : "";
-        html += "<li>" + name + kb +
-          ' <button type="button" class="btn small danger" data-del-file="' + name +
-          '" data-speaker="' + s.name + '">×</button></li>';
+        html += '<li><span class="file-name">' + name + kb + '</span>' +
+          '<button type="button" class="btn small danger" data-del-file="' + name +
+          '" data-speaker="' + s.name + '">🗑 Видалити</button></li>';
       });
       html += "</ul></div>";
     });
     el.innerHTML = html;
     el.querySelectorAll("[data-del-samples]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
-        if (!confirm("Видалити всі «" + btn.dataset.delSamples + "»?")) return;
+        if (!confirm("Видалити всі зразки «" + btn.dataset.delSamples + "»?")) return;
         var form = new FormData(); form.append("speaker", btn.dataset.delSamples);
         await fetch("./delete_samples", { method: "POST", body: form });
         await refreshStatus();
@@ -298,6 +342,7 @@
     });
     el.querySelectorAll("[data-del-file]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
+        if (!confirm("Видалити файл «" + btn.dataset.delFile + "»?")) return;
         var form = new FormData();
         form.append("speaker", btn.dataset.speaker);
         form.append("filename", btn.dataset.delFile);
@@ -309,20 +354,20 @@
 
   function renderVoiceprints(list) {
     var el = $("voiceprint-list");
-    if (!list.length) { el.innerHTML = '<p class="empty">Немає.</p>'; return; }
+    if (!list.length) { el.innerHTML = '<p class="empty">Немає voiceprint. Зробіть Enrollment після зразків.</p>'; return; }
     var html = '<ul class="voiceprint-list">';
     list.forEach(function (name) {
-      html += '<li><span class="badge">✓</span> <strong>' + name +
-        '</strong> <button type="button" class="btn small danger" data-del-vp="' + name + '">×</button></li>';
+      html += '<li><span class="badge">✓</span> <span class="vp-name"><strong>' + name +
+        '</strong></span> <button type="button" class="btn small danger" data-del-vp="' + name + '">🗑 Видалити</button></li>';
     });
     html += "</ul>";
     el.innerHTML = html;
     el.querySelectorAll("[data-del-vp]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
-        if (!confirm("Видалити voiceprint?")) return;
+        if (!confirm("Видалити voiceprint «" + btn.dataset.delVp + "»? Після цього потрібен Restart.")) return;
         var form = new FormData(); form.append("speaker", btn.dataset.delVp);
         await fetch("./delete_voiceprint", { method: "POST", body: form });
-        restartBanner.classList.remove("hidden");
+        setNeedsRestart(true);
         await refreshStatus();
       });
     });

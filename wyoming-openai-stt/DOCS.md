@@ -1,8 +1,8 @@
 # Wyoming OpenAI STT
 
-Speech-to-Text через **OpenAI-compatible API** (Groq, OpenAI, LocalAI…).
+Speech-to-Text через **OpenAI-compatible API** (Groq, OpenAI, LocalAI, тощо).
 
-Порт **10300**. Добре працює разом з **Voice Match**.
+Порт **10300**. Добре працює разом з **Voice Match** (як upstream).
 
 ---
 
@@ -11,39 +11,42 @@ Speech-to-Text через **OpenAI-compatible API** (Groq, OpenAI, LocalAI…).
 За замовчуванням:
 - мови: **uk ru**
 - режим: **auto** — модель сама визначає, українська це чи російська
-- якщо невпевнено — пріоритет **українській**
+- якщо невпевнено — пріоритет **українській** (перша в списку)
 
-Англійська та інші мови не використовуються.
+Англійська та інші мови за замовчуванням не використовуються.
 
-| Режим | Поведінка |
-|-------|-----------|
+| Режим (`language_mode`) | Поведінка |
+|-------------------------|-----------|
 | **auto** | Автовизначення між uk і ru (рекомендовано) |
 | **fixed** | Завжди перша мова зі списку (uk) |
 
-Pipeline у Home Assistant може лишатися з мовою «українська» — для auto це не критично: аддон орієнтується на uk/ru.
+Pipeline у Home Assistant може лишатися з мовою «українська» — для `auto` це не критично: аддон орієнтується на uk/ru.
 
 ---
 
-## Налаштування
+## Параметри Configuration
+
+| Параметр (англ.) | Українською | Опис | Приклад |
+|------------------|-------------|------|---------|
+| **base_url** | Базовий URL API | Адреса OpenAI-compatible endpoint | `https://api.groq.com/openai/v1` |
+| **api_key** | API-ключ | Ключ провайдера (для Groq — з console.groq.com, починається з `gsk_`) | `gsk_...` |
+| **model** | Модель | Назва моделі у провайдера | `whisper-large-v3-turbo` |
+| **languages** | Мови | Мови через пробіл; перша — пріоритет при невпевненості | `uk ru` |
+| **language_mode** | Режим мови | `auto` або `fixed` | `auto` |
+| **log_level** | Рівень логування | `DEBUG` / `INFO` / `WARNING` / `ERROR` | `INFO` |
 
 Підписи полів у Configuration показуються **над** полем вводу (українською / російською / англійською залежно від мови інтерфейсу HA).
-
-| Поле | Приклад |
-|------|---------|
-| Базовий URL API | `https://api.groq.com/openai/v1` |
-| API-ключ | `gsk_...` з console.groq.com |
-| Модель | `whisper-large-v3-turbo` |
-| Мови | `uk ru` |
-| Режим мови | `auto` |
 
 ### Рекомендовані моделі
 
 **Groq**
 - `whisper-large-v3-turbo` — швидко і достатньо точно
-- `whisper-large-v3` — точніше, дорожче
+- `whisper-large-v3` — точніше, дорожче за токенами
 
 **OpenAI**
-- `whisper-1`, `gpt-4o-mini-transcribe`, `gpt-4o-transcribe`
+- `whisper-1`
+- `gpt-4o-mini-transcribe`
+- `gpt-4o-transcribe`
 
 ---
 
@@ -51,14 +54,16 @@ Pipeline у Home Assistant може лишатися з мовою «украї�
 
 1. Режим **auto**, мови `uk ru`
 2. Спробуйте модель `whisper-large-v3`
-3. У pipeline бажано українська
+3. У Assist pipeline бажано українська
 4. Менше шуму, чіткіша вимова
-5. У Voice Match «Поріг виділення сегментів» ≈ 0.30, якщо обрізає слова
+5. У Voice Match параметр `extraction_threshold` (`Поріг виділення сегментів`) ≈ 0.30, якщо обрізає слова
 
 ---
 
 ## Підключення
 
 1. Start аддона  
-2. Wyoming Protocol → порт **10300**  
-   або Voice Match → `upstream_uri = tcp://homeassistant:10300`
+2. **Wyoming Protocol** → порт **10300**  
+   або у Voice Match: `upstream_uri = tcp://homeassistant:10300`
+
+Без заповненого **api_key** розпізнавання не працюватиме — перевірте логи аддона.

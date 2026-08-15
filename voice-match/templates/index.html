@@ -10,40 +10,39 @@
   <div class="container">
     <header>
       <h1>🎤 Voice Match</h1>
-      <p class="subtitle">Запис WAV · перевірка якості · enrollment</p>
+      <p class="subtitle">Запис WAV · перевірка якості · enrollment · voiceprint</p>
     </header>
 
     <div id="flash-box"></div>
-    <div id="restart-banner" class="banner warn hidden">
-      <span>⚠ Voiceprint оновлено — потрібен Restart.</span>
-      <button type="button" class="btn primary" id="btn-restart">🔄 Restart аддона</button>
-    </div>
 
     <section class="card">
       <h2>0. Пошук Wyoming STT</h2>
-      <p class="hint">Поточний upstream: <code id="current-upstream">—</code></p>
+      <p class="hint">Поточний upstream: <code id="current-upstream">—</code>. Якщо порожньо — натисніть «Сканувати» і скопіюйте URI у Configuration аддона.</p>
       <button type="button" class="btn secondary" id="btn-scan">🔍 Сканувати</button>
       <div id="scan-results" class="scan-results hidden"></div>
     </section>
 
     <section class="card">
       <h2>1. Спікер</h2>
+      <p class="hint">Оберіть існуючого спікера зі списку або введіть нове ім’я латиницею (a–z, 0–9, _, −).</p>
       <div class="field">
         <label for="speaker-select">Існуючий спікер</label>
-        <select id="speaker-select">
-          <option value="">— новий / обрати —</option>
-        </select>
+        <div class="select-wrap">
+          <select id="speaker-select">
+            <option value="">— новий / обрати —</option>
+          </select>
+        </div>
       </div>
       <div class="field">
-        <label for="speaker">Або нове ім'я (латиниця)</label>
+        <label for="speaker">Або нове ім’я (латиниця)</label>
         <input type="text" id="speaker" placeholder="наприклад: denys"
-               pattern="[a-z0-9_\-]{1,32}">
+               pattern="[a-z0-9_\-]{1,32}" autocomplete="off">
       </div>
     </section>
 
     <section class="card">
       <h2>2. Запис з мікрофона → WAV</h2>
-      <p class="hint">Запис → Стоп → Перевірити (тривалість, гучність, …) → Зберегти або Видалити.</p>
+      <p class="hint">Запис → Стоп → Перевірити (тривалість, гучність) → Зберегти або Видалити. Бажано 3–10 секунд чистої мови.</p>
       <div class="rec-row">
         <button type="button" class="btn danger" id="btn-rec">🔴 Запис</button>
         <span id="rec-status" class="hint">Готовий</span>
@@ -59,10 +58,10 @@
 
     <section class="card">
       <h2>3. Файли з диска</h2>
-      <p class="hint">Будь-який формат → на сервері конвертується в WAV 16 kHz mono.</p>
+      <p class="hint">Будь-який формат (wav, flac, mp3, ogg, webm…) → на сервері конвертується в WAV 16 kHz mono.</p>
       <div class="dropzone" id="dropzone">
         <input type="file" id="files" multiple accept="audio/*,.wav,.flac,.ogg,.mp3,.webm">
-        <p>Перетягніть або <span class="link">виберіть</span></p>
+        <p>Перетягніть або <span class="link">виберіть файли</span></p>
         <ul id="file-list"></ul>
       </div>
       <button type="button" class="btn primary" id="btn-upload">Завантажити</button>
@@ -70,6 +69,7 @@
 
     <section class="card">
       <h2>4. Зразки</h2>
+      <p class="hint">Після збереження записів перевірте якість. Залиште 3–5 зразків зі статусом OK.</p>
       <button type="button" class="btn secondary" id="btn-check-all">Перевірити всі зразки</button>
       <div id="quality-box" class="hidden"></div>
       <div id="enrollment-list"><p class="empty">…</p></div>
@@ -77,7 +77,7 @@
 
     <section class="card">
       <h2>5. Enrollment</h2>
-      <p class="hint">Після 3–5 OK-зразків → enrollment → Restart.</p>
+      <p class="hint">Після 3–5 OK-зразків натисніть Enrollment — створюється voiceprint. Потім обов’язково Restart аддона.</p>
       <div class="field row">
         <input type="text" id="enroll-speaker" placeholder="спікер" pattern="[a-z0-9_\-]{1,32}">
         <button type="button" class="btn primary" id="btn-enroll">▶ Enrollment</button>
@@ -87,11 +87,22 @@
 
     <section class="card">
       <h2>6. Voiceprints</h2>
+      <p class="hint">Збережені відбитки голосу. Після видалення теж потрібен Restart.</p>
       <div id="voiceprint-list"><p class="empty">…</p></div>
     </section>
 
+    <section class="card actions-card">
+      <h2>Restart аддона</h2>
+      <p class="hint">Після успішного Enrollment (або видалення voiceprint) аддон треба перезапустити, щоб voiceprint підхопився. Можна спробувати авто-restart або відкрити сторінку аддона в Supervisor і натиснути Restart там.</p>
+      <div class="actions-row">
+        <button type="button" class="btn primary" id="btn-restart">🔄 Спробувати Restart</button>
+        <a class="btn secondary" id="btn-addon-page" href="/hassio/addon/self/info" target="_top">Відкрити сторінку аддона</a>
+      </div>
+      <p id="restart-hint" class="hint warn hidden">⚠ Voiceprint оновлено — зробіть Restart, інакше зміни не застосуються.</p>
+    </section>
+
     <footer>
-      <p>Wyoming Protocol → <strong>10350</strong>. Без перевірки голосу: вимкніть «Вимагати збіг голосу».</p>
+      <p>Wyoming Protocol → порт <strong>10350</strong>. Без перевірки голосу: у Configuration вимкніть «Вимагати збіг голосу».</p>
     </footer>
   </div>
   <script src="static/app.js"></script>
