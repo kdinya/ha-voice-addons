@@ -1,0 +1,29 @@
+configuration:
+  base_url:
+    name: "Базовый URL API"
+    description: >-
+      Адрес OpenAI-compatible API.
+      Groq: https://api.groq.com/openai/v1
+      OpenAI: https://api.openai.com/v1
+  api_key:
+    name: "API-ключ"
+    description: >-
+      Ключ провайдера. Для Groq: console.groq.com → API Keys (начинается с gsk_).
+  model:
+    name: "Модель"
+    description: >-
+      Groq: whisper-large-v3-turbo (быстро) или whisper-large-v3 (точнее).
+      OpenAI: whisper-1, gpt-4o-mini-transcribe, gpt-4o-transcribe.
+  languages:
+    name: "Языки"
+    description: >-
+      Языки через пробел. Рекомендуется: uk ru
+      Украинский первым — язык по умолчанию, если автоопределение неуверенно.
+  language_mode:
+    name: "Режим языка"
+    description: >-
+      auto — модель сама выбирает между украинским и русским (рекомендуется).
+      fixed — всегда использовать первый язык из списка (uk).
+  log_level:
+    name: "Уровень логирования"
+    description: "DEBUG / INFO / WARNING / ERROR"

@@ -4,29 +4,29 @@ configuration:
     description: >-
       Where cleaned audio is sent after voice verification.
       Format: tcp://host:port (e.g. tcp://homeassistant:10300).
-      Use the “Scan Wyoming STT” button in the Voice Match web UI.
+      Use “Scan Wyoming STT” in the web UI.
   verify_threshold:
     name: "Voice verification threshold"
     description: >-
-      Cosine similarity threshold (0–1). Higher = stricter.
-      Default 0.40. Does not affect transcription quality — only who is accepted.
+      Similarity threshold (0–1). Higher = stricter. Default 0.40.
+      Does not affect transcription quality — only who is accepted.
   extraction_threshold:
-    name: "Voice extraction threshold"
+    name: "Segment extraction threshold"
     description: >-
-      Strips TV/other voices. Default 0.35.
+      Strips TV/other voices before STT. Default 0.35.
+      If your words are cut off, lower to 0.28–0.32.
   max_verify_seconds:
-    name: "Max first verification length (sec)"
-    description: "Audio length used for the first verification pass. Default 5."
+    name: "Max first verification length"
+    description: "Seconds of audio for the first verification pass. Default 5."
   verify_window_seconds:
-    name: "Sliding window size (sec)"
-    description: "Window size for fallback verification. Default 3."
+    name: "Sliding window size"
+    description: "Window size for fallback verification (sec). Default 3."
   verify_step_seconds:
-    name: "Sliding window step (sec)"
-    description: "Step for sliding window. Default 1.5."
+    name: "Sliding window step"
+    description: "Step for sliding window (sec). Default 1.5."
   stt_languages:
     name: "Recognition languages"
-    description: >-
-      Comma-separated languages advertised to Home Assistant (e.g. uk,en).
+    description: "Comma-separated languages, e.g. uk,ru. Put Ukrainian first as default."
   tag_speaker:
     name: "Tag speaker name in transcript"
     description: "Prepend [name] to the transcript."

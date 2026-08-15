@@ -12,12 +12,18 @@ configuration:
   model:
     name: "Модель"
     description: >-
-      Рекомендовано для Groq: whisper-large-v3-turbo (швидко) або whisper-large-v3 (точніше).
-      Для OpenAI: whisper-1, gpt-4o-mini-transcribe, gpt-4o-transcribe.
+      Groq: whisper-large-v3-turbo (швидко) або whisper-large-v3 (точніше).
+      OpenAI: whisper-1, gpt-4o-mini-transcribe, gpt-4o-transcribe.
   languages:
     name: "Мови"
     description: >-
-      Мови через пробіл, які оголошуються Home Assistant. Приклад: uk en
+      Мови через пробіл. Рекомендовано: uk ru
+      Українська першою — мова за замовчуванням, якщо автовизначення невпевнене.
+  language_mode:
+    name: "Режим мови"
+    description: >-
+      auto — модель сама обирає між українською та російською (рекомендовано).
+      fixed — завжди використовувати першу мову зі списку (uk).
   log_level:
     name: "Рівень логування"
     description: "DEBUG / INFO / WARNING / ERROR"

@@ -1,5 +1,5 @@
 name: "Voice Match"
-version: "1.3.0"
+version: "1.3.1"
 slug: "voice_match"
 description: "Speaker-verified ASR proxy. Verifies your voice, strips TV/background noise, then forwards cleaned audio to any Wyoming STT. Includes Ingress web UI for easy voice enrollment."
 url: "https://github.com/YOUR_USERNAME/ha-voice-addons"
@@ -27,7 +27,7 @@ options:
   max_verify_seconds: 5.0
   verify_window_seconds: 3.0
   verify_step_seconds: 1.5
-  stt_languages: "uk"
+  stt_languages: "uk,ru"
   tag_speaker: false
   require_speaker_match: true
   save_rejected: false

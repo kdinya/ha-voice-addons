@@ -12,7 +12,7 @@
 2. Configuration:
    - **Адреса Wyoming STT** → `tcp://homeassistant:10300`  
      (або натисніть «Сканувати Wyoming STT» у веб-інтерфейсі)
-   - **Мови** → `uk` або `uk,en`
+   - **Мови** → `uk,ru` (українська та російська)
 3. Start аддона.
 4. Бічне меню **Voice Match** → завантажте 3–5 записів голосу → enrollment.
 5. **Restart** аддона.

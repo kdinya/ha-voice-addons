@@ -15,7 +15,14 @@ configuration:
       OpenAI: whisper-1, gpt-4o-mini-transcribe, gpt-4o-transcribe.
   languages:
     name: "Languages"
-    description: "Space-separated languages advertised to Home Assistant, e.g. uk en"
+    description: >-
+      Space-separated languages. Recommended: uk ru
+      Ukrainian first = default when detection is unsure.
+  language_mode:
+    name: "Language mode"
+    description: >-
+      auto — model picks between Ukrainian and Russian (recommended).
+      fixed — always use the first language in the list (uk).
   log_level:
     name: "Log level"
     description: "DEBUG / INFO / WARNING / ERROR"

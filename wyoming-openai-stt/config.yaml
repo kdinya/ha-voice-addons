@@ -1,7 +1,7 @@
 name: "Wyoming OpenAI STT"
-version: "1.1.0"
+version: "1.2.0"
 slug: "wyoming_openai_stt"
-description: "Wyoming Speech-to-Text using any OpenAI-compatible API (OpenAI, Groq, LocalAI, Speaches, etc.). Simple configuration: base URL, API key, model."
+description: "Wyoming Speech-to-Text через OpenAI-compatible API (Groq, OpenAI тощо). Мови: українська та російська, auto-визначення."
 url: "https://github.com/YOUR_USERNAME/ha-voice-addons"
 arch:
   - amd64
@@ -12,18 +12,20 @@ init: false
 ports:
   10300/tcp: 10300
 ports_description:
-  10300/tcp: "Wyoming protocol port — add as Wyoming Protocol integration or use as upstream for Voice Match"
+  10300/tcp: "Wyoming protocol — додайте як Wyoming Protocol або upstream для Voice Match"
 map:
   - data:rw
 options:
-  base_url: "https://api.openai.com/v1"
+  base_url: "https://api.groq.com/openai/v1"
   api_key: ""
-  model: "whisper-1"
-  languages: "uk en"
+  model: "whisper-large-v3-turbo"
+  languages: "uk ru"
+  language_mode: "auto"
   log_level: "INFO"
 schema:
   base_url: "str"
   api_key: "password"
   model: "str"
   languages: "str"
+  language_mode: "list(auto|fixed)"
   log_level: "list(DEBUG|INFO|WARNING|ERROR)"

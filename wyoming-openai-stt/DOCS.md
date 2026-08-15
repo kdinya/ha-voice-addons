@@ -1,73 +1,64 @@
 # Wyoming OpenAI STT
 
-Speech-to-Text через **будь-який OpenAI-compatible API**:
-OpenAI, Groq, LocalAI, Speaches тощо.
+Speech-to-Text через **OpenAI-compatible API** (Groq, OpenAI, LocalAI…).
 
-Працює як звичайний Wyoming STT для Home Assistant (порт **10300**).
-Ідеально поєднується з аддоном **Voice Match**.
+Порт **10300**. Добре працює разом з **Voice Match**.
+
+---
+
+## Мови: українська та російська
+
+За замовчуванням:
+- мови: **uk ru**
+- режим: **auto** — модель сама визначає, українська це чи російська
+- якщо невпевнено — пріоритет **українській**
+
+Англійська та інші мови не використовуються.
+
+| Режим | Поведінка |
+|-------|-----------|
+| **auto** | Автовизначення між uk і ru (рекомендовано) |
+| **fixed** | Завжди перша мова зі списку (uk) |
+
+Pipeline у Home Assistant може лишатися з мовою «українська» — для auto це не критично: аддон орієнтується на uk/ru.
 
 ---
 
 ## Налаштування
 
-| Поле | Опис |
-|------|------|
-| **Базовий URL API** | Адреса API (див. приклади нижче) |
-| **API-ключ** | Ключ провайдера (для Groq — з console.groq.com) |
-| **Модель** | Назва моделі (див. рекомендовані) |
-| **Мови** | Через пробіл, наприклад `uk en` |
-| **Рівень логування** | INFO за замовчуванням |
+Підписи полів у Configuration показуються **над** полем вводу (українською / російською / англійською залежно від мови інтерфейсу HA).
 
-### Приклади base_url
-
-| Провайдер | base_url |
-|-----------|----------|
-| **Groq** (рекомендовано) | `https://api.groq.com/openai/v1` |
-| OpenAI | `https://api.openai.com/v1` |
-| LocalAI / Speaches | `http://IP:порт/v1` |
+| Поле | Приклад |
+|------|---------|
+| Базовий URL API | `https://api.groq.com/openai/v1` |
+| API-ключ | `gsk_...` з console.groq.com |
+| Модель | `whisper-large-v3-turbo` |
+| Мови | `uk ru` |
+| Режим мови | `auto` |
 
 ### Рекомендовані моделі
 
 **Groq**
-| Модель | Коли обрати |
-|--------|-------------|
-| `whisper-large-v3-turbo` | **Найкращий баланс** швидкість/ціна/якість |
-| `whisper-large-v3` | Максимальна точність (дорожче) |
+- `whisper-large-v3-turbo` — швидко і достатньо точно
+- `whisper-large-v3` — точніше, дорожче
 
 **OpenAI**
-| Модель | Коли обрати |
-|--------|-------------|
-| `whisper-1` | Класика, стабільна |
-| `gpt-4o-mini-transcribe` | Сучасніша, часто точніша |
-| `gpt-4o-transcribe` | Найвища якість OpenAI |
-
-Ключ Groq: [console.groq.com](https://console.groq.com) → API Keys.
+- `whisper-1`, `gpt-4o-mini-transcribe`, `gpt-4o-transcribe`
 
 ---
 
-## Якщо розпізнає «не те»
+## Якщо текст з помилками
 
-1. Переконайтеся, що в pipeline вибрана мова **українська** (або потрібна вам).
-2. У полі **Мови** аддона має бути `uk` (або `uk en`).
-3. Спробуйте `whisper-large-v3` замість turbo — трохи точніше.
-4. Говоріть чіткіше; менше фонового шуму.
-5. Voice Match може «обрізати» початок фрази — трохи знизьте
-   `extraction_threshold` у Voice Match (наприклад 0.30).
+1. Режим **auto**, мови `uk ru`
+2. Спробуйте модель `whisper-large-v3`
+3. У pipeline бажано українська
+4. Менше шуму, чіткіша вимова
+5. У Voice Match «Поріг виділення сегментів» ≈ 0.30, якщо обрізає слова
 
 ---
 
 ## Підключення
 
-1. Start цього аддона.
-2. Settings → Devices & Services → **Wyoming Protocol**
-   - Host: IP Home Assistant або `homeassistant`
-   - Port: **10300**
-3. Або вкажіть у Voice Match: `upstream_uri = tcp://homeassistant:10300`
-
----
-
-## Технічні деталі
-
-- Базується на [roryeckel/wyoming_openai](https://github.com/roryeckel/wyoming_openai)
-- Режим **лише STT** (TTS вимкнено)
-- 404 на `/readyz` / `/health` у логах для Groq — нормально
+1. Start аддона  
+2. Wyoming Protocol → порт **10300**  
+   або Voice Match → `upstream_uri = tcp://homeassistant:10300`
