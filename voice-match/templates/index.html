@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wyoming Voice Match — Enrollment</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎤 Wyoming Voice Match</h1>
+      <p class="subtitle">Завантаження зразків голосу та реєстрація (enrollment)</p>
+    </header>
+
+    <div id="flash-box"></div>
+
+    <section class="card">
+      <h2>1. Завантажити аудіо</h2>
+      <p class="hint">Підтримуються .wav, .flac, .ogg, .mp3 (бажано 16 kHz mono, 3–10 сек). 3–5 записів — оптимально.</p>
+
+      <div class="field">
+        <label for="speaker">Ім'я спікера</label>
+        <input type="text" id="speaker" placeholder="наприклад: denys"
+               pattern="[a-z0-9_\-]{1,32}" title="тільки a-z, 0-9, _ -">
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="files" multiple accept=".wav,.flac,.ogg,.mp3,audio/*">
+        <p>Перетягніть файли сюди або <span class="link">виберіть</span></p>
+        <ul id="file-list"></ul>
+      </div>
+
+      <button type="button" class="btn primary" id="btn-upload">Завантажити</button>
+    </section>
+
+    <section class="card">
+      <h2>2. Зразки для enrollment</h2>
+      <div id="enrollment-list"><p class="empty">Завантаження…</p></div>
+    </section>
+
+    <section class="card">
+      <h2>3. Запустити enrollment</h2>
+      <p class="hint">Скрипт обчислить voiceprint і збереже в <code>/data/voiceprints/</code>.</p>
+      <div class="field row">
+        <input type="text" id="enroll-speaker" placeholder="ім'я спікера" pattern="[a-z0-9_\-]{1,32}">
+        <button type="button" class="btn primary" id="btn-enroll">▶ Запустити enrollment</button>
+      </div>
+      <pre id="enroll-log" class="log hidden"></pre>
+    </section>
+
+    <section class="card">
+      <h2>4. Зареєстровані голоси (voiceprints)</h2>
+      <div id="voiceprint-list"><p class="empty">Завантаження…</p></div>
+      <p class="hint warn">⚠ Після зміни voiceprint <strong>перезапустіть аддон</strong>.</p>
+    </section>
+
+    <footer>
+      <p>Після enrollment: Wyoming Protocol порт <strong>10350</strong> → STT у Voice Assistant pipeline.</p>
+    </footer>
+  </div>
+  <script src="static/app.js"></script>
+</body>
+</html>
