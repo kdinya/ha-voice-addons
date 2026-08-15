@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Ingress web UI for Wyoming Voice Match — upload samples & run enrollment."""
+"""Ingress web UI for Voice Match — enrollment + Wyoming STT scan."""
 
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -19,9 +21,20 @@ VOICEPRINTS_DIR = Path(os.environ.get("VOICEPRINTS_DIR", "/data/voiceprints"))
 MODEL_DIR = os.environ.get("MODEL_DIR", "/data/models")
 DEVICE = os.environ.get("DEVICE", "cpu")
 TEMPLATE_DIR = Path("/templates")
+CURRENT_UPSTREAM = os.environ.get("UPSTREAM_URI", "tcp://homeassistant:10300")
 
 ALLOWED_EXTENSIONS = {".wav", ".flac", ".ogg", ".mp3"}
 SPEAKER_RE = re.compile(r"^[a-z0-9_\-]{1,32}$")
+
+# Hosts and ports commonly used by Wyoming STT in Home Assistant
+SCAN_HOSTS = [
+    "homeassistant",
+    "localhost",
+    "127.0.0.1",
+    "supervisor",
+    "hassio",
+]
+SCAN_PORTS = [10300, 10301, 10302, 10303, 10304, 10305, 10400, 10500]
 
 
 def allowed_file(filename: str) -> bool:
@@ -47,6 +60,44 @@ def list_voiceprints():
     if not VOICEPRINTS_DIR.exists():
         return []
     return sorted(f.stem for f in VOICEPRINTS_DIR.glob("*.npy"))
+
+
+def _probe_tcp(host: str, port: int, timeout: float = 0.6) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def scan_wyoming_stt():
+    """Probe common hosts/ports for open Wyoming STT services."""
+    found = []
+    seen = set()
+    tasks = [(h, p) for h in SCAN_HOSTS for p in SCAN_PORTS]
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        futures = {pool.submit(_probe_tcp, h, p): (h, p) for h, p in tasks}
+        for fut in as_completed(futures):
+            host, port = futures[fut]
+            try:
+                if fut.result():
+                    uri = f"tcp://{host}:{port}"
+                    if uri not in seen:
+                        seen.add(uri)
+                        label = "Faster Whisper / OpenAI STT" if port == 10300 else f"port {port}"
+                        found.append({
+                            "uri": uri,
+                            "host": host,
+                            "port": port,
+                            "label": label,
+                            "current": uri == CURRENT_UPSTREAM,
+                        })
+            except Exception:
+                pass
+
+    found.sort(key=lambda x: (x["host"], x["port"]))
+    return found
 
 
 @app.route("/")
@@ -167,6 +218,21 @@ def api_status():
     return jsonify({
         "enrollment": list_speakers_enrollment(),
         "voiceprints": list_voiceprints(),
+        "upstream_uri": CURRENT_UPSTREAM,
+    })
+
+
+@app.route("/api/scan_stt")
+def api_scan_stt():
+    results = scan_wyoming_stt()
+    return jsonify({
+        "ok": True,
+        "found": results,
+        "current": CURRENT_UPSTREAM,
+        "hint": (
+            "Скопіюйте URI в Configuration → upstream_uri і перезапустіть аддон. "
+            "Сканування перевіряє типові хости/порти всередині мережі Home Assistant."
+        ),
     })
 
 

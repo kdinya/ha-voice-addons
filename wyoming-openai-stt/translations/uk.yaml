@@ -1,0 +1,23 @@
+configuration:
+  base_url:
+    name: "Базовий URL API"
+    description: >-
+      Адреса OpenAI-compatible API.
+      Groq: https://api.groq.com/openai/v1
+      OpenAI: https://api.openai.com/v1
+  api_key:
+    name: "API-ключ"
+    description: >-
+      Ключ провайдера. Для Groq: console.groq.com → API Keys (починається з gsk_).
+  model:
+    name: "Модель"
+    description: >-
+      Рекомендовано для Groq: whisper-large-v3-turbo (швидко) або whisper-large-v3 (точніше).
+      Для OpenAI: whisper-1, gpt-4o-mini-transcribe, gpt-4o-transcribe.
+  languages:
+    name: "Мови"
+    description: >-
+      Мови через пробіл, які оголошуються Home Assistant. Приклад: uk en
+  log_level:
+    name: "Рівень логування"
+    description: "DEBUG / INFO / WARNING / ERROR"

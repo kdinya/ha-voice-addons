@@ -1,6 +1,9 @@
 # Changelog
 
+## 1.1.0
+- Українські та англійські підписи опцій
+- Детальна документація з рекомендованими моделями (Groq / OpenAI)
+- Підказки щодо якості розпізнавання
+
 ## 1.0.0
-- Initial release
-- STT-only OpenAI-compatible proxy based on roryeckel/wyoming_openai
-- Simple options: base_url, api_key, model, languages
+- Початковий реліз (STT-only proxy на базі wyoming_openai)

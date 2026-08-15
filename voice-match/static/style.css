@@ -190,3 +190,43 @@ footer {
   color: var(--muted);
   font-size: 0.85rem;
 }
+
+.btn.secondary {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.btn.secondary:hover { background: rgba(10, 132, 255, 0.15); }
+
+.scan-results { margin-top: 1rem; }
+.scan-list { list-style: none; }
+.scan-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.scan-list .uri {
+  background: #1c1c1e;
+  padding: 0.25em 0.5em;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.badge.current {
+  background: var(--success);
+  color: #000;
+  font-size: 0.7rem;
+  padding: 0.15em 0.45em;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.field label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}

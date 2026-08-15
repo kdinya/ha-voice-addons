@@ -1,16 +1,14 @@
 # Changelog
 
+## 1.3.0
+- Кнопка «Сканувати Wyoming STT» в Ingress UI
+- Покращені українські та англійські назви опцій (підписи над полями)
+- Детальніша документація українською
+- Підказки щодо порогів і якості розпізнавання тексту
+
 ## 1.2.0
-- Renamed slug to `voice_match` (repository: ha-voice-addons)
-- Cleaner name in Add-on Store: **Voice Match**
-- Updated documentation for use with Wyoming OpenAI STT companion add-on
-- Default upstream points to `tcp://homeassistant:10300` (works with official Faster Whisper or wyoming-openai-stt)
+- Репозиторій ha-voice-addons, slug `voice_match`
+- Сумісність з Wyoming OpenAI STT
 
 ## 1.1.3
-- Ukrainian / Russian / English translations for configuration options
-- Improved enrollment UI
-- Language patch (STT_LANGUAGES)
-
-## 1.1.0
-- Initial Home Assistant add-on release based on jxlarrea/wyoming-voice-match
-- Ingress web UI for voice enrollment
+- Переклади uk/ru/en, Ingress enrollment UI

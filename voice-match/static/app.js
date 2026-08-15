@@ -4,10 +4,13 @@
   const fileList = document.getElementById("file-list");
   const btnUpload = document.getElementById("btn-upload");
   const btnEnroll = document.getElementById("btn-enroll");
+  const btnScan = document.getElementById("btn-scan");
   const speakerInput = document.getElementById("speaker");
   const enrollSpeaker = document.getElementById("enroll-speaker");
   const enrollLog = document.getElementById("enroll-log");
   const flashBox = document.getElementById("flash-box");
+  const scanResults = document.getElementById("scan-results");
+  const currentUpstream = document.getElementById("current-upstream");
 
   function flash(msg, type) {
     flashBox.innerHTML = '<div class="flash ' + type + '">' + msg + "</div>";
@@ -103,12 +106,65 @@
     }
   });
 
+  btnScan.addEventListener("click", async function () {
+    btnScan.disabled = true;
+    btnScan.textContent = "⏳ Сканування…";
+    scanResults.classList.remove("hidden");
+    scanResults.innerHTML = "<p class=\"empty\">Перевірка типових хостів і портів…</p>";
+    try {
+      var res = await fetch("./api/scan_stt");
+      var data = await res.json();
+      if (!data.found || !data.found.length) {
+        scanResults.innerHTML =
+          "<p class=\"empty\">Нічого не знайдено. Переконайтеся, що STT-аддон запущений " +
+          "і використовуйте вручну <code>tcp://homeassistant:10300</code>.</p>";
+      } else {
+        var html = "<ul class=\"scan-list\">";
+        data.found.forEach(function (item) {
+          var badge = item.current ? ' <span class="badge current">поточний</span>' : "";
+          html +=
+            "<li>" +
+            "<code class=\"uri\">" + item.uri + "</code>" +
+            badge +
+            ' <button type="button" class="btn small" data-copy="' + item.uri +
+            '">Копіювати</button>' +
+            "</li>";
+        });
+        html += "</ul>";
+        if (data.hint) {
+          html += "<p class=\"hint\">" + data.hint + "</p>";
+        }
+        scanResults.innerHTML = html;
+        scanResults.querySelectorAll("[data-copy]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var uri = btn.dataset.copy;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(uri).then(function () {
+                flash("Скопійовано: " + uri, "success");
+              });
+            } else {
+              flash("URI: " + uri, "success");
+            }
+          });
+        });
+      }
+    } catch (err) {
+      scanResults.innerHTML = "<p class=\"empty\">Помилка сканування: " + err + "</p>";
+    } finally {
+      btnScan.disabled = false;
+      btnScan.textContent = "🔍 Сканувати Wyoming STT";
+    }
+  });
+
   async function refreshStatus() {
     try {
       var res = await fetch("./api/status");
       var data = await res.json();
       renderEnrollment(data.enrollment || []);
       renderVoiceprints(data.voiceprints || []);
+      if (data.upstream_uri) {
+        currentUpstream.textContent = data.upstream_uri;
+      }
     } catch (err) { console.error(err); }
   }
 

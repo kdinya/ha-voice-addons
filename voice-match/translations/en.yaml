@@ -1,64 +1,41 @@
 configuration:
   upstream_uri:
-    name: "Upstream ASR address (upstream_uri)"
+    name: "Wyoming STT address"
     description: >-
-      Address of your real Wyoming STT service where cleaned audio is forwarded
-      after voice verification. Format: tcp://IP:port
-      (e.g. tcp://homeassistant:10300 or tcp://192.168.1.39:10300).
+      Where cleaned audio is sent after voice verification.
+      Format: tcp://host:port (e.g. tcp://homeassistant:10300).
+      Use the “Scan Wyoming STT” button in the Voice Match web UI.
   verify_threshold:
-    name: "Voice verification threshold (verify_threshold)"
+    name: "Voice verification threshold"
     description: >-
-      Cosine similarity threshold to confirm the enrolled user is speaking.
-      Range 0–1. Higher = stricter (fewer false accepts, higher risk of
-      rejecting quiet/distant speech). Recommended 0.30 (soft) – 0.55 (strict).
-      Default 0.40.
+      Cosine similarity threshold (0–1). Higher = stricter.
+      Default 0.40. Does not affect transcription quality — only who is accepted.
   extraction_threshold:
-    name: "Segment extraction threshold (extraction_threshold)"
+    name: "Voice extraction threshold"
     description: >-
-      Similarity threshold for extracting your speech segments from background
-      noise or other voices (TV, conversation in the same room). Range 0–1.
-      Default 0.35.
+      Strips TV/other voices. Default 0.35.
   max_verify_seconds:
-    name: "Max first-pass duration (max_verify_seconds)"
-    description: >-
-      Maximum audio length used for the first verification pass.
-      If shorter — the whole clip is checked. Default 5 seconds.
+    name: "Max first verification length (sec)"
+    description: "Audio length used for the first verification pass. Default 5."
   verify_window_seconds:
-    name: "Sliding window size (verify_window_seconds)"
-    description: >-
-      Window size for fallback verification when the first pass is inconclusive.
-      Default 3 seconds.
+    name: "Sliding window size (sec)"
+    description: "Window size for fallback verification. Default 3."
   verify_step_seconds:
-    name: "Sliding window step (verify_step_seconds)"
-    description: >-
-      Step of the sliding window for fallback verification.
-      Default 1.5 seconds.
+    name: "Sliding window step (sec)"
+    description: "Step for sliding window. Default 1.5."
   stt_languages:
-    name: "Recognition languages (stt_languages)"
+    name: "Recognition languages"
     description: >-
-      Comma-separated list of languages (e.g. uk,en,ru) that will always be
-      advertised to Home Assistant — even if the upstream ASR did not report
-      them. Needed so this add-on can be selected as STT for a pipeline in the
-      desired language. Default: uk.
+      Comma-separated languages advertised to Home Assistant (e.g. uk,en).
   tag_speaker:
-    name: "Tag speaker name (tag_speaker)"
-    description: >-
-      If enabled, prepends [speaker_name] to the transcript. Useful when the
-      transcript is processed by an LLM agent and you need to know who spoke.
+    name: "Tag speaker name in transcript"
+    description: "Prepend [name] to the transcript."
   require_speaker_match:
-    name: "Require voice match (require_speaker_match)"
-    description: >-
-      If enabled, audio is forwarded to STT only after successful voice
-      verification. If disabled, the service runs in transparent mode and
-      forwards everything (useful for diagnostics).
+    name: "Require speaker match"
+    description: "If off, all audio is forwarded (diagnostics)."
   save_rejected:
-    name: "Save rejected recordings (save_rejected)"
-    description: >-
-      Saves audio clips and metadata for commands that failed voice
-      verification. Useful for diagnostics and threshold tuning, but uses disk
-      space — enable temporarily.
+    name: "Save rejected samples"
+    description: "Keep audio that failed verification."
   log_level:
-    name: "Log level (log_level)"
-    description: >-
-      Verbosity of service logs. DEBUG — maximum detail (for troubleshooting),
-      INFO — normal, WARNING/ERROR — only warnings and errors.
+    name: "Log level"
+    description: "DEBUG / INFO / WARNING / ERROR"

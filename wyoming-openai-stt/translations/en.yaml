@@ -1,0 +1,21 @@
+configuration:
+  base_url:
+    name: "API base URL"
+    description: >-
+      OpenAI-compatible API base URL.
+      Groq: https://api.groq.com/openai/v1
+      OpenAI: https://api.openai.com/v1
+  api_key:
+    name: "API key"
+    description: "Provider API key (Groq keys start with gsk_)."
+  model:
+    name: "Model"
+    description: >-
+      Groq: whisper-large-v3-turbo (fast) or whisper-large-v3 (more accurate).
+      OpenAI: whisper-1, gpt-4o-mini-transcribe, gpt-4o-transcribe.
+  languages:
+    name: "Languages"
+    description: "Space-separated languages advertised to Home Assistant, e.g. uk en"
+  log_level:
+    name: "Log level"
+    description: "DEBUG / INFO / WARNING / ERROR"

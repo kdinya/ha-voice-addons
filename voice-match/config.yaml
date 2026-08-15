@@ -1,8 +1,8 @@
 name: "Voice Match"
-version: "1.2.0"
+version: "1.3.0"
 slug: "voice_match"
 description: "Speaker-verified ASR proxy. Verifies your voice, strips TV/background noise, then forwards cleaned audio to any Wyoming STT. Includes Ingress web UI for easy voice enrollment."
-url: "https://github.com/kdinya/ha-voice-addons"
+url: "https://github.com/YOUR_USERNAME/ha-voice-addons"
 arch:
   - amd64
   - aarch64
