@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingress web UI: record→wav, quality check, enroll, scan, restart."""
+"""Ingress web UI for autonomous Voice Match. Hot-reload — no restart after enrollment."""
 
 import json
 import os
@@ -17,7 +17,7 @@ from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder="/static", static_url_path="/static")
-app.secret_key = os.environ.get("FLASK_SECRET", "wyoming-voice-match-ingress")
+app.secret_key = os.environ.get("FLASK_SECRET", "voice-match-ingress")
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
 ENROLLMENT_DIR = Path(os.environ.get("ENROLLMENT_DIR", "/data/enrollment"))
@@ -46,10 +46,7 @@ def list_speakers_enrollment():
             files = []
             for f in sorted(d.iterdir()):
                 if f.is_file() and f.suffix.lower() in ALLOWED_EXTENSIONS:
-                    files.append({
-                        "name": f.name,
-                        "size_kb": round(f.stat().st_size / 1024, 1),
-                    })
+                    files.append({"name": f.name, "size_kb": round(f.stat().st_size / 1024, 1)})
             result.append({"name": d.name, "files": files, "count": len(files)})
     return result
 
@@ -108,9 +105,7 @@ def scan_wyoming_stt():
                     continue
                 seen.add(uri)
                 found.append({
-                    "uri": uri,
-                    "host": host,
-                    "port": port,
+                    "uri": uri, "host": host, "port": port,
                     "label": "STT" if port == 10300 else f"port {port}",
                     "wyoming_ok": _wyoming_info_probe(host, port),
                     "current": uri == CURRENT_UPSTREAM,
@@ -121,19 +116,13 @@ def scan_wyoming_stt():
     return found
 
 
-def convert_to_wav(src: Path, dest: Path) -> tuple[bool, str]:
-    """Convert any audio to 16 kHz mono 16-bit WAV via ffmpeg."""
+def convert_to_wav(src: Path, dest: Path):
     dest.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        "ffmpeg", "-y", "-i", str(src),
-        "-ac", "1", "-ar", "16000", "-sample_fmt", "s16",
-        str(dest),
-    ]
+    cmd = ["ffmpeg", "-y", "-i", str(src), "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", str(dest)]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if proc.returncode != 0 or not dest.exists():
-            err = (proc.stderr or proc.stdout or "")[-500:]
-            return False, f"ffmpeg error: {err}"
+            return False, f"ffmpeg error: {(proc.stderr or '')[-500:]}"
         return True, "ok"
     except FileNotFoundError:
         return False, "ffmpeg not installed"
@@ -142,99 +131,48 @@ def convert_to_wav(src: Path, dest: Path) -> tuple[bool, str]:
 
 
 def analyze_wav(path: Path) -> dict:
-    """Inspect WAV: duration, rate, channels, peak/rms energy."""
-    info = {
-        "file": path.name,
-        "size_kb": round(path.stat().st_size / 1024, 1),
-        "duration_s": None,
-        "sample_rate": None,
-        "channels": None,
-        "rms": None,
-        "peak": None,
-        "quality": "bad",
-        "note": "",
-        "issues": [],
-    }
+    info = {"file": path.name, "size_kb": round(path.stat().st_size / 1024, 1),
+            "duration_s": None, "sample_rate": None, "channels": None,
+            "rms": None, "peak": None, "quality": "bad", "note": "", "issues": []}
     try:
         with wave.open(str(path), "rb") as w:
-            rate = w.getframerate()
-            ch = w.getnchannels()
-            nframes = w.getnframes()
-            sampwidth = w.getsampwidth()
-            duration = nframes / float(rate) if rate else 0
-            info["sample_rate"] = rate
-            info["channels"] = ch
-            info["duration_s"] = round(duration, 2)
-
+            rate, ch, nframes, sampwidth = w.getframerate(), w.getnchannels(), w.getnframes(), w.getsampwidth()
+            info["sample_rate"], info["channels"], info["duration_s"] = rate, ch, round(nframes / float(rate) if rate else 0, 2)
             raw = w.readframes(nframes)
             if sampwidth == 2 and raw:
                 import array
                 samples = array.array("h")
                 samples.frombytes(raw)
                 if ch > 1:
-                    # take first channel only for metrics
                     samples = array.array("h", (samples[i] for i in range(0, len(samples), ch)))
                 if samples:
                     peak = max(abs(s) for s in samples)
-                    mean_sq = sum(s * s for s in samples) / len(samples)
-                    rms = mean_sq ** 0.5
-                    info["peak"] = int(peak)
-                    info["rms"] = round(rms, 1)
-            else:
-                info["issues"].append("нестандартний формат семплів")
+                    rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
+                    info["peak"], info["rms"] = int(peak), round(rms, 1)
     except Exception as e:
-        info["issues"].append(f"не вдалося прочитати wav: {e}")
-        info["note"] = "файл пошкоджений або не WAV"
-        info["quality"] = "bad"
+        info["issues"].append(str(e))
+        info["note"] = "файл пошкоджений"
         return info
-
-    # Rules for enrollment quality
     if info["duration_s"] is not None:
         if info["duration_s"] < 1.5:
             info["issues"].append("занадто короткий (<1.5 с)")
         elif info["duration_s"] < 3.0:
             info["issues"].append("короткий (краще 3–10 с)")
-        elif info["duration_s"] > 20:
-            info["issues"].append("дуже довгий (>20 с)")
-
-    if info["sample_rate"] and info["sample_rate"] not in (16000, 22050, 44100, 48000):
-        info["issues"].append(f"незвичний sample rate {info['sample_rate']}")
-
-    if info["channels"] and info["channels"] > 2:
-        info["issues"].append(f"багато каналів ({info['channels']})")
-
     if info["peak"] is not None:
         if info["peak"] < 500:
-            info["issues"].append("дуже тихо (майже тиша)")
+            info["issues"].append("дуже тихо")
         elif info["peak"] < 2000:
-            info["issues"].append("тихо — говоріть гучніше/ближче")
+            info["issues"].append("тихо")
         if info["peak"] >= 32000:
-            info["issues"].append("можливе кліпування (перевантаження)")
-
-    if info["rms"] is not None and info["rms"] < 100:
-        info["issues"].append("низька енергія сигналу")
-
-    hard = any(
-        x.startswith("занадто короткий")
-        or x.startswith("дуже тихо")
-        or x.startswith("не вдалося")
-        or x.startswith("файл пошкоджений")
-        for x in info["issues"]
-    )
-    soft = bool(info["issues"]) and not hard
-
+            info["issues"].append("кліпування")
+    hard = any(x.startswith(("занадто короткий", "дуже тихо")) for x in info["issues"])
     if hard:
-        info["quality"] = "bad"
-        info["note"] = "; ".join(info["issues"])
-    elif soft:
-        info["quality"] = "weak"
-        info["note"] = "; ".join(info["issues"])
+        info["quality"], info["note"] = "bad", "; ".join(info["issues"])
+    elif info["issues"]:
+        info["quality"], info["note"] = "weak", "; ".join(info["issues"])
     else:
         info["quality"] = "ok"
-        info["note"] = (
-            f"OK — {info['duration_s']}с, {info['sample_rate']} Hz, "
-            f"peak={info['peak']}, rms={info['rms']}"
-        )
+        info["note"] = f"OK — {info['duration_s']}с"
     return info
 
 
@@ -242,45 +180,19 @@ def _run_quality_check(speaker: str) -> dict:
     speaker_dir = ENROLLMENT_DIR / speaker
     if not speaker_dir.exists():
         return {"ok": False, "message": "Немає зразків", "scores": []}
-
     scores = []
     for f in sorted(speaker_dir.iterdir()):
         if not f.is_file() or f.suffix.lower() not in ALLOWED_EXTENSIONS:
             continue
-        wav_path = f
-        tmp = None
-        if f.suffix.lower() != ".wav":
-            tmp = Path(tempfile.mkdtemp()) / (f.stem + ".wav")
-            ok, err = convert_to_wav(f, tmp)
-            if not ok:
-                scores.append({
-                    "file": f.name,
-                    "size_kb": round(f.stat().st_size / 1024, 1),
-                    "quality": "bad",
-                    "note": f"не конвертується: {err}",
-                    "issues": [err],
-                })
-                continue
-            wav_path = tmp
-        info = analyze_wav(wav_path)
+        info = analyze_wav(f) if f.suffix.lower() == ".wav" else {"file": f.name, "quality": "bad", "note": "не wav"}
         info["file"] = f.name
         scores.append(info)
-        if tmp and tmp.exists():
-            try:
-                tmp.unlink()
-                tmp.parent.rmdir()
-            except OSError:
-                pass
-
     ok_count = sum(1 for s in scores if s.get("quality") == "ok")
     return {
         "ok": True,
-        "message": f"Перевірено {len(scores)} файл(ів), нормальних: {ok_count}",
+        "message": f"Перевірено {len(scores)}, OK: {ok_count}",
         "scores": scores,
-        "recommendation": (
-            "Видаліть bad, бажано й weak. Залиште 3–5 зразків зі статусом OK, "
-            "потім «Запустити enrollment» → Restart."
-        ),
+        "recommendation": "Видаліть bad/weak. 3–5 OK → Enrollment. Restart більше НЕ потрібен.",
     }
 
 
@@ -290,79 +202,31 @@ def _supervisor_request(path: str, method: str = "GET", timeout: float = 10):
         return None, "Немає SUPERVISOR_TOKEN"
     try:
         import urllib.request
-        req = urllib.request.Request(
-            f"http://supervisor{path}",
-            method=method,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        req = urllib.request.Request(f"http://supervisor{path}", method=method,
+                                     headers={"Authorization": f"Bearer {token}"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", errors="replace")
-        try:
-            data = json.loads(body) if body else {}
-        except json.JSONDecodeError:
-            data = {"raw": body}
-        return data, None
+        return (json.loads(body) if body else {}), None
     except Exception as e:
         return None, str(e)
 
 
 def get_self_addon_info() -> dict:
-    """Resolve slug / frontend paths for this addon via Supervisor API."""
     data, err = _supervisor_request("/addons/self/info")
     if err or not data:
-        return {
-            "ok": False,
-            "message": err or "Не вдалося отримати info",
-            "slug": "voice_match",
-            "paths": [
-                "/config/app/voice_match/info",
-                "/hassio/addon/voice_match/info",
-            ],
-        }
-    info = data.get("data") if isinstance(data, dict) and "data" in data else data
-    if not isinstance(info, dict):
-        info = {}
-    slug = info.get("slug") or info.get("addon") or "voice_match"
-    paths = [
-        f"/config/app/{slug}/info",
-        f"/hassio/addon/{slug}/info",
-    ]
-    if "_" in slug:
-        short = slug.split("_", 1)[-1]
-        if short and short != slug:
-            paths.extend([
-                f"/config/app/{short}/info",
-                f"/hassio/addon/{short}/info",
-            ])
-    return {
-        "ok": True,
-        "slug": slug,
-        "name": info.get("name") or "Voice Match",
-        "state": info.get("state"),
-        "version": info.get("version"),
-        "paths": paths,
-        "message": "ok",
-    }
+        return {"ok": False, "slug": "voice_match", "paths": ["/config/app/voice_match/info"]}
+    info = data.get("data", data) if isinstance(data, dict) else {}
+    slug = info.get("slug") or "voice_match"
+    return {"ok": True, "slug": slug, "name": info.get("name") or "Voice Match",
+            "state": info.get("state"), "version": info.get("version"),
+            "paths": [f"/config/app/{slug}/info", f"/hassio/addon/{slug}/info"]}
 
 
 def restart_self_addon() -> dict:
-    token = os.environ.get("SUPERVISOR_TOKEN", "")
-    if not token:
-        return {
-            "ok": False,
-            "message": "Немає Supervisor API. Restart вручну: Settings → Add-ons → Voice Match → Restart.",
-        }
     data, err = _supervisor_request("/addons/self/restart", method="POST", timeout=15)
     if err:
-        return {
-            "ok": False,
-            "message": f"Авто-restart не вдався ({err}). Відкрийте сторінку аддона і натисніть Restart.",
-        }
-    return {
-        "ok": True,
-        "message": "Команду Restart надіслано. Аддон зараз перезапускається (UI може на кілька секунд зникнути).",
-        "raw": data,
-    }
+        return {"ok": False, "message": f"Restart не вдався: {err}"}
+    return {"ok": True, "message": "Restart надіслано."}
 
 
 @app.route("/")
@@ -379,64 +243,43 @@ def static_files(filename):
 def upload():
     speaker = (request.form.get("speaker") or "").strip().lower()
     if not SPEAKER_RE.match(speaker):
-        return jsonify({"ok": False, "message": "Невірне ім'я спікера (a-z0-9_-)."}), 400
-
+        return jsonify({"ok": False, "message": "Невірне ім'я спікера."}), 400
     files = request.files.getlist("files")
-    if not files or all(not f.filename for f in files):
+    if not files:
         return jsonify({"ok": False, "message": "Файли не вибрані."}), 400
-
     target = ENROLLMENT_DIR / speaker
     target.mkdir(parents=True, exist_ok=True)
-    saved, errors = 0, []
-
+    saved = 0
     for f in files:
         if not f or not f.filename or not allowed_file(f.filename):
             continue
-        raw_name = re.sub(r"[^\w.\-]", "_", Path(f.filename).name)
-        tmp_path = target / f".tmp_{int(time.time())}_{raw_name}"
-        f.save(str(tmp_path))
-
-        # Always store as wav for enrollment compatibility
-        dest = target / f"{Path(raw_name).stem}_{int(time.time())}.wav"
-        if dest.exists():
-            dest = target / f"{Path(raw_name).stem}_{int(time.time())}_{saved}.wav"
-        ok, err = convert_to_wav(tmp_path, dest)
+        raw = re.sub(r"[^\w.\-]", "_", Path(f.filename).name)
+        tmp = target / f".tmp_{int(time.time())}_{raw}"
+        f.save(str(tmp))
+        dest = target / f"{Path(raw).stem}_{int(time.time())}.wav"
+        ok, _ = convert_to_wav(tmp, dest)
         try:
-            tmp_path.unlink(missing_ok=True)
+            tmp.unlink(missing_ok=True)
         except OSError:
             pass
         if ok:
             saved += 1
-        else:
-            errors.append(f"{raw_name}: {err}")
-
     if saved:
-        return jsonify({
-            "ok": True,
-            "message": f"Збережено {saved} файл(ів) як WAV для «{speaker}».",
-            "errors": errors,
-            "need_enroll": True,
-        })
-    return jsonify({
-        "ok": False,
-        "message": "Не вдалося зберегти. " + "; ".join(errors[:3]),
-    }), 400
+        return jsonify({"ok": True, "message": f"Збережено {saved} файл(ів).", "need_enroll": True})
+    return jsonify({"ok": False, "message": "Не вдалося зберегти."}), 400
 
 
 @app.route("/upload_recording", methods=["POST"])
 def upload_recording():
     speaker = (request.form.get("speaker") or "").strip().lower()
     if not SPEAKER_RE.match(speaker):
-        return jsonify({"ok": False, "message": "Невірне ім'я спікера."}), 400
-
+        return jsonify({"ok": False, "message": "Невірне ім'я."}), 400
     f = request.files.get("audio")
     if not f:
         return jsonify({"ok": False, "message": "Немає аудіо."}), 400
-
     target = ENROLLMENT_DIR / speaker
     target.mkdir(parents=True, exist_ok=True)
-
-    tmp = target / f".rec_tmp_{int(time.time())}.webm"
+    tmp = target / f".rec_{int(time.time())}.webm"
     f.save(str(tmp))
     dest = target / f"rec_{int(time.time())}.wav"
     ok, err = convert_to_wav(tmp, dest)
@@ -444,70 +287,29 @@ def upload_recording():
         tmp.unlink(missing_ok=True)
     except OSError:
         pass
-
     if not ok:
-        return jsonify({"ok": False, "message": f"Конвертація в WAV не вдалась: {err}"}), 500
-
-    analysis = analyze_wav(dest)
-    return jsonify({
-        "ok": True,
-        "message": f"Запис збережено як {dest.name}",
-        "file": dest.name,
-        "analysis": analysis,
-        "need_enroll": True,
-    })
-
-
-@app.route("/api/analyze_blob", methods=["POST"])
-def analyze_blob():
-    """Analyze a recording before save (optional client flow)."""
-    f = request.files.get("audio")
-    if not f:
-        return jsonify({"ok": False, "message": "Немає аудіо"}), 400
-    with tempfile.TemporaryDirectory() as td:
-        src = Path(td) / "in.webm"
-        wav = Path(td) / "out.wav"
-        f.save(str(src))
-        ok, err = convert_to_wav(src, wav)
-        if not ok:
-            return jsonify({"ok": False, "message": err, "quality": "bad"})
-        info = analyze_wav(wav)
-        return jsonify({"ok": True, **info})
+        return jsonify({"ok": False, "message": err}), 500
+    return jsonify({"ok": True, "message": f"Збережено {dest.name}", "analysis": analyze_wav(dest), "need_enroll": True})
 
 
 @app.route("/enroll", methods=["POST"])
 def enroll():
     speaker = (request.form.get("speaker") or "").strip().lower()
     if not SPEAKER_RE.match(speaker):
-        return jsonify({"ok": False, "log": "Невірне ім'я спікера."}), 400
-
+        return jsonify({"ok": False, "log": "Невірне ім'я."}), 400
     speaker_dir = ENROLLMENT_DIR / speaker
     if not speaker_dir.exists() or not any(speaker_dir.iterdir()):
-        return jsonify({"ok": False, "log": f"Немає файлів у /data/enrollment/{speaker}/"}), 400
-
-    cmd = [
-        sys.executable, "-m", "scripts.enroll",
-        "--speaker", speaker,
-        "--enrollment-dir", str(ENROLLMENT_DIR),
-        "--voiceprints-dir", str(VOICEPRINTS_DIR),
-        "--model-dir", MODEL_DIR,
-        "--device", DEVICE,
-    ]
+        return jsonify({"ok": False, "log": "Немає файлів."}), 400
+    cmd = [sys.executable, "-m", "scripts.enroll", "--speaker", speaker,
+           "--enrollment-dir", str(ENROLLMENT_DIR), "--voiceprints-dir", str(VOICEPRINTS_DIR),
+           "--model-dir", MODEL_DIR, "--device", DEVICE]
     try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=300, env=os.environ.copy(),
-        )
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=os.environ.copy())
         log = (proc.stdout or "") + (proc.stderr or "")
         ok = proc.returncode == 0
         if ok:
-            log += (
-                "\n\n✅ Voiceprint збережено.\n"
-                "⚠ Обов'язково Restart аддона — блок «Restart аддона» внизу сторінки "
-                "або кнопка Restart на сторінці аддона в Supervisor."
-            )
-        return jsonify({"ok": ok, "log": log, "need_restart": ok})
-    except subprocess.TimeoutExpired:
-        return jsonify({"ok": False, "log": "Таймаут (5 хв)."}), 500
+            log += "\n\n✅ Voiceprint збережено і активовано.\nHot-reload: рестарт більше НЕ потрібен.\nНовий голос працює з наступного запиту."
+        return jsonify({"ok": ok, "log": log, "need_restart": False})
     except Exception as e:
         return jsonify({"ok": False, "log": str(e)}), 500
 
@@ -515,11 +317,10 @@ def enroll():
 @app.route("/delete_samples", methods=["POST"])
 def delete_samples():
     speaker = (request.form.get("speaker") or "").strip().lower()
-    if not SPEAKER_RE.match(speaker):
-        return jsonify({"ok": False}), 400
-    path = ENROLLMENT_DIR / speaker
-    if path.exists():
-        shutil.rmtree(path)
+    if SPEAKER_RE.match(speaker):
+        path = ENROLLMENT_DIR / speaker
+        if path.exists():
+            shutil.rmtree(path)
     return jsonify({"ok": True})
 
 
@@ -527,51 +328,41 @@ def delete_samples():
 def delete_file():
     speaker = (request.form.get("speaker") or "").strip().lower()
     filename = (request.form.get("filename") or "").strip()
-    if not SPEAKER_RE.match(speaker) or not filename or "/" in filename or "\\" in filename:
-        return jsonify({"ok": False, "message": "Невірні параметри"}), 400
+    if not SPEAKER_RE.match(speaker) or not filename or "/" in filename:
+        return jsonify({"ok": False}), 400
     path = ENROLLMENT_DIR / speaker / filename
-    if path.exists() and path.is_file():
+    if path.exists():
         path.unlink()
-        return jsonify({"ok": True, "message": f"Видалено {filename}"})
-    return jsonify({"ok": False, "message": "Файл не знайдено"}), 404
+        return jsonify({"ok": True})
+    return jsonify({"ok": False}), 404
 
 
 @app.route("/delete_voiceprint", methods=["POST"])
 def delete_voiceprint():
     speaker = (request.form.get("speaker") or "").strip().lower()
-    if not SPEAKER_RE.match(speaker):
-        return jsonify({"ok": False}), 400
-    vp = VOICEPRINTS_DIR / f"{speaker}.npy"
-    if vp.exists():
-        vp.unlink()
+    if SPEAKER_RE.match(speaker):
+        vp = VOICEPRINTS_DIR / f"{speaker}.npy"
+        if vp.exists():
+            vp.unlink()
     return jsonify({"ok": True})
 
 
 @app.route("/api/status")
 def api_status():
-    return jsonify({
-        "enrollment": list_speakers_enrollment(),
-        "voiceprints": list_voiceprints(),
-        "speakers": list_all_speaker_names(),
-        "upstream_uri": CURRENT_UPSTREAM,
-    })
+    return jsonify({"enrollment": list_speakers_enrollment(), "voiceprints": list_voiceprints(),
+                    "speakers": list_all_speaker_names(), "upstream_uri": CURRENT_UPSTREAM})
 
 
 @app.route("/api/scan_stt")
 def api_scan_stt():
-    return jsonify({
-        "ok": True,
-        "found": scan_wyoming_stt(),
-        "current": CURRENT_UPSTREAM,
-        "hint": "Скопіюйте URI → Configuration → Адреса Wyoming STT → Save → Restart.",
-    })
+    return jsonify({"ok": True, "found": scan_wyoming_stt(), "current": CURRENT_UPSTREAM})
 
 
 @app.route("/api/check_quality", methods=["POST"])
 def api_check_quality():
     speaker = (request.form.get("speaker") or "").strip().lower()
     if not SPEAKER_RE.match(speaker):
-        return jsonify({"ok": False, "message": "Невірне ім'я спікера."}), 400
+        return jsonify({"ok": False}), 400
     return jsonify(_run_quality_check(speaker))
 
 
