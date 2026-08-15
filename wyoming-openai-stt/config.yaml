@@ -2,7 +2,7 @@ name: "Wyoming OpenAI STT"
 version: "1.0.0"
 slug: "wyoming_openai_stt"
 description: "Wyoming Speech-to-Text using any OpenAI-compatible API (OpenAI, Groq, LocalAI, Speaches, etc.). Simple configuration: base URL, API key, model."
-url: "https://github.com/YOUR_USERNAME/ha-voice-addons"
+url: "https://github.com/kdinya/ha-voice-addons"
 arch:
   - amd64
   - aarch64
