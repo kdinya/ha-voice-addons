@@ -1,7 +1,7 @@
 name: "Voice Match"
-version: "1.5.2"
+version: "2.0.0"
 slug: "voice_match"
-description: "Верифікація голосу для Home Assistant. Перевіряє, що говорить саме ви, прибирає фон і передає аудіо на Wyoming STT. Зручний веб-інтерфейс для запису та реєстрації голосу."
+description: "Верифікація голосу для Home Assistant. Повністю автономний. Hot-reload voiceprints — рестарт після enrollment більше не потрібен."
 url: "https://github.com/kdinya/ha-voice-addons"
 arch:
   - amd64
@@ -24,8 +24,8 @@ hassio_api: true
 hassio_role: manager
 options:
   upstream_uri: "tcp://homeassistant:10300"
-  verify_threshold: 0.40
-  extraction_threshold: 0.35
+  verify_threshold: 0.35
+  extraction_threshold: 0.30
   max_verify_seconds: 5.0
   verify_window_seconds: 3.0
   verify_step_seconds: 1.5
