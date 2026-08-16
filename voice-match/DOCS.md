@@ -8,6 +8,10 @@
 Мікрофон → Voice Match (порт 10350) → Wyoming STT (наприклад 10300) → Home Assistant
 ```
 
+**Перший старт:** завантаження моделі ECAPA-TDNN з Hugging Face може зайняти **1–3 хвилини** (залежить від мережі). Кеш зберігається в `/data/hf_cache` і `/data/models` — наступні запуски швидші.
+
+Сумісність: Home Assistant OS, Core 2026.8.x, Supervisor 2026.07.x (amd64 / aarch64).
+
 ## Швидкий старт
 
 1. Встановіть і запустіть **Wyoming OpenAI STT** (або інший Wyoming STT).
@@ -82,6 +86,7 @@
 | Власний голос відхиляється | Знизити `verify_threshold`, більше OK-зразків, Enrollment |
 | Обрізає слова | Знизити `extraction_threshold` |
 | Після Enrollment нічого не змінилось | Зачекайте 1–2 сек (hot-reload); перевірте логи |
+| Довгий перший старт | Нормально: модель качається 1–3 хв |
 | Немає upstream | Сканувати в UI або `tcp://homeassistant:10300` |
 
 ## Дані
@@ -89,3 +94,5 @@
 - Зразки: `/data/enrollment/<speaker>/`
 - Voiceprints: `/data/voiceprints/<speaker>.npy`
 - Моделі кешуються в `/data/models` та `/data/hf_cache`
+
+Див. також [SECURITY.md](../SECURITY.md).
