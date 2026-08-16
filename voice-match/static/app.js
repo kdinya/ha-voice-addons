@@ -50,8 +50,16 @@
 
   async function startMeter() {
     try {
-      meterStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("getUserMedia не підтримується в цьому контексті");
+      }
+      meterStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
       meterCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (meterCtx.state === "suspended") {
+        await meterCtx.resume();
+      }
       var source = meterCtx.createMediaStreamSource(meterStream);
       meterAnalyser = meterCtx.createAnalyser();
       meterAnalyser.fftSize = 2048;
@@ -63,8 +71,17 @@
       $("btn-meter-toggle").textContent = "⏹ Вимкнути індикатор";
       meterLoop();
     } catch (err) {
-      flash("Мікрофон: " + err, "error");
-      $("meter-status").textContent = "Помилка мікрофона";
+      var msg = (err && err.message) ? err.message : String(err);
+      var name = (err && err.name) ? err.name : "";
+      var hint = "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError" || /permission|denied|NotAllowed/i.test(msg)) {
+        hint = " Дозвіл на мікрофон заблоковано. Відкрийте цю сторінку в новій вкладці (кнопка «Відкрити в новій вкладці» біля Ingress) і дозвольте мікрофон.";
+      } else if (window.self !== window.top) {
+        hint = " Сторінка в iframe (HA Ingress). Часто мікрофон блокується. Відкрийте Ingress у новій вкладці браузера.";
+      }
+      flash("Мікрофон: " + msg + hint, "error");
+      $("meter-status").textContent = "Помилка мікрофона — відкрийте в новій вкладці";
+      console.error("startMeter failed", err);
     }
   }
 

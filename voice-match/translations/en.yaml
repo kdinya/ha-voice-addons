@@ -39,3 +39,28 @@ configuration:
   log_level:
     name: "Log level"
     description: "DEBUG / INFO / WARNING / ERROR"
+  silence_threshold_enabled:
+    name: "Enable silence threshold"
+    description: "If off, silence is not rejected by RMS level. Useful for diagnostics."
+  silence_threshold:
+    name: "Silence threshold (RMS)"
+    description: >-
+      Sound level below which audio is treated as silence (50–400).
+      Default 180. Use “Silence calibration” in the web UI: measure background for 3 s
+      and set a value slightly above the measured Max.
+  silence_timeout_enabled:
+    name: "Enable silence timeout"
+    description: "If off, long silence will not trigger a fast empty Transcript."
+  silence_timeout:
+    name: "Silence timeout (sec)"
+    description: >-
+      Seconds of near-total silence before returning an empty Transcript immediately
+      (1–5 s, default 2.0). Helps Voice Satellite close the session quickly.
+  min_speech_duration_enabled:
+    name: "Enable minimum speech duration"
+    description: "If off, very short buffers still go to verification."
+  min_speech_duration:
+    name: "Minimum speech duration (sec)"
+    description: >-
+      Buffers shorter than this are not sent to voice verification (0.5–3 s, default 1.0).
+      Protects against coughs / short noises.

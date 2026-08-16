@@ -82,26 +82,13 @@
 
 ---
 
-## Підтримка проєкту
-
-Аддони безкоштовні (MIT). Якщо корисні — можна підтримати розвиток або замовити допомогу з setup.
-
-- **[SUPPORT.md](SUPPORT.md)** — донати та платна допомога  
-- **Buy Me a Coffee**: https://www.buymeacoffee.com/kdinya  
-- **Patreon**: https://www.patreon.com/kdinya  
-- **Liberapay**: https://liberapay.com/kdinya  
-- **GitHub Sponsors**: https://github.com/sponsors/kdinya  
-- **[ROADMAP.md](ROADMAP.md)** — що free зараз і які Pro-ідеї на майбутнє  
-
-Зірка ⭐ на репозиторії теж допомагає.
-
 ## Релізи
 
 Після змін у `main`:
 
 ```bash
-git tag 2.0.8
-git push origin 2.0.8
+git tag 2.0.10
+git push origin 2.0.10
 ```
 
 GitHub Action створить Release з текстом із CHANGELOG.
