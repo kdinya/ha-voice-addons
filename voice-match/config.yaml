@@ -1,5 +1,5 @@
 name: "Voice Match"
-version: "2.0.12"
+version: "2.0.13"
 slug: "voice_match"
 description: "Верифікація голосу для Home Assistant. Повністю автономний. Hot-reload voiceprints — рестарт після enrollment більше не потрібен."
 url: "https://github.com/kdinya/ha-voice-addons"
@@ -39,6 +39,7 @@ options:
   silence_timeout: 2.0
   min_speech_duration_enabled: true
   min_speech_duration: 1.0
+  early_endpoint_enabled: true
 schema:
   upstream_uri: "str"
   verify_threshold: "float(0,1)"
@@ -57,3 +58,4 @@ schema:
   silence_timeout: "float(1,5)"
   min_speech_duration_enabled: "bool"
   min_speech_duration: "float(0.5,3)"
+  early_endpoint_enabled: "bool"

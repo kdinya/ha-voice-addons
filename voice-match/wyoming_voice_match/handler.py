@@ -84,6 +84,8 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         self._responded: bool = False
         self._stream_start_time: Optional[float] = None
         self._session_id: str = uuid.uuid4().hex[:8]
+        self._heard_speech: bool = False
+        self._last_early_check_bytes: int = 0
 
         # Configurable silence controls (each can be disabled)
         self.silence_threshold_enabled = _env_bool("SILENCE_THRESHOLD_ENABLED", True)
@@ -92,6 +94,9 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         self.silence_timeout = _env_float("SILENCE_TIMEOUT", 2.0)
         self.min_speech_duration_enabled = _env_bool("MIN_SPEECH_DURATION_ENABLED", True)
         self.min_speech_duration = _env_float("MIN_SPEECH_DURATION", 1.0)
+        # Early empty Transcript during stream (before client AudioStop) so
+        # Voice Satellite does not wait for LLM/TTS on pure silence.
+        self.early_endpoint_enabled = _env_bool("EARLY_ENDPOINT_ENABLED", True)
 
     async def handle_event(self, event: Event) -> bool:
         if Describe.is_type(event.type):
@@ -105,14 +110,19 @@ class SpeakerVerifyHandler(AsyncEventHandler):
             self._responded = False
             self._stream_start_time = time.monotonic()
             self._session_id = uuid.uuid4().hex[:8]
+            self._heard_speech = False
+            self._last_early_check_bytes = 0
             _LOGGER.info("[%s] -- New audio session started --", self._session_id)
             return True
         if AudioChunk.is_type(event.type):
+            if self._responded:
+                return True
             chunk = AudioChunk.from_event(event)
             self._audio_rate = chunk.rate
             self._audio_width = chunk.width
             self._audio_channels = chunk.channels
             self._audio_buffer += chunk.audio
+            await self._maybe_early_endpoint()
             return True
         if AudioStop.is_type(event.type):
             if self._responded:
@@ -120,6 +130,64 @@ class SpeakerVerifyHandler(AsyncEventHandler):
             await self._process_audio()
             return True
         return True
+
+    def _buffer_duration(self) -> float:
+        bps = self._audio_rate * self._audio_width * self._audio_channels
+        if bps <= 0:
+            return 0.0
+        return len(self._audio_buffer) / bps
+
+    async def _maybe_early_endpoint(self) -> None:
+        """If the stream is pure silence long enough, send empty Transcript now.
+
+        Voice Satellite waits for Transcript before closing the pipeline / TTS.
+        Without this, silence is held until client AudioStop (often 15–30+ s).
+        Only fires when no speech was detected yet — real utterances still wait
+        for client VAD + AudioStop.
+        """
+        if self._responded or not self.early_endpoint_enabled:
+            return
+        if not self.silence_threshold_enabled and not self.silence_timeout_enabled:
+            return
+
+        # Throttle: check about every 0.25 s of new audio
+        bps = self._audio_rate * self._audio_width * self._audio_channels
+        min_bytes = max(int(bps * 0.25), 1)
+        if len(self._audio_buffer) - self._last_early_check_bytes < min_bytes:
+            return
+        self._last_early_check_bytes = len(self._audio_buffer)
+
+        duration = self._buffer_duration()
+        # Need at least silence_timeout seconds of audio before ending early
+        need = self.silence_timeout if self.silence_timeout_enabled else 2.0
+        need = max(need, 1.5)
+        if duration < need:
+            return
+
+        stats = self._audio_stats(bytes(self._audio_buffer), self._audio_rate)
+        thr = float(self.silence_threshold) if self.silence_threshold_enabled else 180.0
+        peak = stats["peak"]
+        mean = stats.get("mean", peak)
+        quiet_ratio = stats.get("quiet_ratio", 0.0)
+
+        # Mark speech if energy clearly above ambient
+        if peak >= thr * 3 or mean >= thr * 1.5 or quiet_ratio < 0.7:
+            self._heard_speech = True
+            return
+
+        if self._heard_speech:
+            return
+
+        # Entire stream still looks like silence / near-silence
+        if mean < thr or (peak < thr * 1.5 and quiet_ratio >= 0.9):
+            sid = self._session_id
+            self._responded = True
+            _LOGGER.info(
+                "[%s] Early-endpoint silence (%.1fs peak=%.0f mean=%.0f quiet=%.0f%% thr=%.0f) "
+                "— empty transcript (client still streaming)",
+                sid, duration, peak, mean, quiet_ratio * 100, thr,
+            )
+            await self.write_event(Transcript(text="").event())
 
     def _audio_stats(self, audio_bytes: bytes, sample_rate: int) -> dict:
         """Return duration, peak/mean RMS and quiet-frame ratio for the buffer.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.13
+- **Early-endpoint при тиші** — якщо з початку стріму немає мови, порожній `Transcript` надсилається через ~`silence_timeout` с (за замовч. 2 с), **не чекаючи** AudioStop від Satellite
+- Satellite/Kiosk швидше закриває pipeline і не чекає AI/TTS на порожній фразі
+- Новий параметр **early_endpoint_enabled** (за замовч. true); після реальної мови early-endpoint не спрацьовує
+
 ## 2.0.12
 - **Fix: тиша більше не йде в повний verify** — fast-reject враховує mean / p90 / частку тихих кадрів, а не лише peak (один клац більше не ламає відсікання)
 - Лог завжди показує `peak / mean / p90 / quiet% / thr` після AudioStop — по них калібрується Поріг тиші (серверна шкала)

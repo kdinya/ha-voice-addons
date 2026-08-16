@@ -1,3 +1,3 @@
 """Voice Match — ASR proxy with speaker verification for Home Assistant."""
 
-__version__ = "2.0.12"
+__version__ = "2.0.13"

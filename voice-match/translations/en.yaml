@@ -64,3 +64,9 @@ configuration:
     description: >-
       Buffers shorter than this are not sent to voice verification (0.5–3 s, default 1.0).
       Protects against coughs / short noises.
+  early_endpoint_enabled:
+    name: "Early endpoint on silence"
+    description: >-
+      If the stream is pure silence from the start, send an empty Transcript after about
+      silence_timeout seconds without waiting for client AudioStop. Lets Voice Satellite
+      close the pipeline faster (no AI/TTS wait). Does not trigger after real speech.

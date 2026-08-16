@@ -64,6 +64,9 @@ def main() -> None:
         "true" if options.get("min_speech_duration_enabled", True) else "false"
     )
     env["MIN_SPEECH_DURATION"] = str(options.get("min_speech_duration", 1.0))
+    env["EARLY_ENDPOINT_ENABLED"] = (
+        "true" if options.get("early_endpoint_enabled", True) else "false"
+    )
 
     for d in ("/data/voiceprints", "/data/enrollment", "/data/models", "/data/hf_cache", "/data/rejections"):
         os.makedirs(d, exist_ok=True)
@@ -77,7 +80,8 @@ def main() -> None:
         f"[entrypoint] Silence controls: threshold={env['SILENCE_THRESHOLD']} "
         f"(on={env['SILENCE_THRESHOLD_ENABLED']}), "
         f"timeout={env['SILENCE_TIMEOUT']}s (on={env['SILENCE_TIMEOUT_ENABLED']}), "
-        f"min_speech={env['MIN_SPEECH_DURATION']}s (on={env['MIN_SPEECH_DURATION_ENABLED']})",
+        f"min_speech={env['MIN_SPEECH_DURATION']}s (on={env['MIN_SPEECH_DURATION_ENABLED']}), "
+        f"early_endpoint={env['EARLY_ENDPOINT_ENABLED']}",
         file=sys.stderr,
     )
 

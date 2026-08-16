@@ -68,3 +68,9 @@ configuration:
     description: >-
       Буфери коротші за це значення не йдуть у перевірку голосу (0.5–3 с, за замовчуванням 1.0).
       Захищає від кашлю / коротких шумів.
+  early_endpoint_enabled:
+    name: "Раннє завершення при тиші"
+    description: >-
+      Якщо з початку сесії лише тиша — надіслати порожній Transcript через ~silence_timeout
+      секунд, не чекаючи AudioStop від Voice Satellite. Satellite швидше закриває pipeline
+      і не чекає відповіді AI/TTS. Для реальної мови не спрацьовує.
