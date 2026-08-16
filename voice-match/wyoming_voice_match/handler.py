@@ -36,8 +36,8 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         tag_speaker: bool = False,
         require_speaker_match: bool = True,
         save_rejected: bool = False,
-        early_reject: bool = True,
         *args,
+        early_reject: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
