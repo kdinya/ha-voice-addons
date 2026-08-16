@@ -40,7 +40,10 @@
 - М’якші пороги за замовчуванням (0.35 / 0.30)
 - У 2.0.3+ прибрано кнопки Restart з UI
 - У 2.0.4 виправлено перевірку запису з мікрофона (`/api/analyze_blob`)
-- У **2.0.7** тривалість слухання повністю на Voice Satellite / Kiosk (без early-reject/таймаутів у аддоні)
+- У **2.0.7** тривалість слухання **повністю** на Voice Satellite / Kiosk Satellite  
+  (в аддоні немає early-reject і немає жодних session-таймаутів 5/30/60 с)
+
+> **Важливо:** якщо ти бачиш затримку 30 або 60 секунд на тиші — це налаштування VAD / max audio session у **Kiosk Satellite або Voice Satellite**, а не в цьому аддоні. Аддон лише чекає `AudioStop` від клієнта.
 
 **Перший старт:** 1–3 хвилини (завантаження моделі ECAPA-TDNN у `/data`). Далі — з кешу.
 
@@ -77,16 +80,16 @@
 
 ---
 
-
----
-
 ## Підтримка проєкту
 
 Аддони безкоштовні (MIT). Якщо корисні — можна підтримати розвиток або замовити допомогу з setup.
 
-- **[SUPPORT.md](SUPPORT.md)** — донати, Sponsors, платна допомога з налаштуванням  
+- **[SUPPORT.md](SUPPORT.md)** — донати та платна допомога  
+- **Buy Me a Coffee**: https://www.buymeacoffee.com/kdinya  
+- **Patreon**: https://www.patreon.com/kdinya  
+- **Liberapay**: https://liberapay.com/kdinya  
+- **GitHub Sponsors**: https://github.com/sponsors/kdinya  
 - **[ROADMAP.md](ROADMAP.md)** — що free зараз і які Pro-ідеї на майбутнє  
-- GitHub Sponsors: https://github.com/sponsors/kdinya  
 
 Зірка ⭐ на репозиторії теж допомагає.
 
@@ -95,8 +98,8 @@
 Після змін у `main`:
 
 ```bash
-git tag 2.0.4
-git push origin 2.0.4
+git tag 2.0.8
+git push origin 2.0.8
 ```
 
 GitHub Action створить Release з текстом із CHANGELOG.
