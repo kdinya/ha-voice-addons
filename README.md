@@ -11,6 +11,8 @@
 
 ## Встановлення в Home Assistant
 
+Перевірено з **Home Assistant OS**, Core **2026.8.x**, Supervisor **2026.07.x**.
+
 1. **Settings → Add-ons → Add-on store → ⋮ → Repositories**
 2. Додайте:
    ```
@@ -36,7 +38,10 @@
 - Повністю автономний (не залежить від чужого образу)
 - **Hot-reload** — після Enrollment рестарт більше НЕ потрібен
 - М’якші пороги за замовчуванням (0.35 / 0.30)
-- У 2.0.3 прибрано кнопки Restart з UI (вони більше не потрібні)
+- У 2.0.3+ прибрано кнопки Restart з UI
+- У 2.0.4 виправлено перевірку запису з мікрофона (`/api/analyze_blob`)
+
+**Перший старт:** 1–3 хвилини (завантаження моделі ECAPA-TDNN у `/data`). Далі — з кешу.
 
 1. У Configuration вкажіть **upstream_uri** (`Адреса Wyoming STT`), напр. `tcp://homeassistant:10300`.
 2. Відкрийте панель **Voice Match**:
@@ -57,7 +62,8 @@
 | `require_speaker_match` | Вимагати збіг голосу | `true` |
 | `log_level` | Рівень логування | `INFO` |
 
-Детальніше: [voice-match/DOCS.md](voice-match/DOCS.md).
+Детальніше: [voice-match/DOCS.md](voice-match/DOCS.md).  
+Безпека: [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -72,9 +78,11 @@
 
 ## Релізи
 
+Після змін у `main`:
+
 ```bash
-git tag 2.0.3
-git push origin 2.0.3
+git tag 2.0.4
+git push origin 2.0.4
 ```
 
 GitHub Action створить Release з текстом із CHANGELOG.

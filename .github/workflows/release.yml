@@ -22,10 +22,11 @@ jobs:
       - name: Notes from CHANGELOG
         id: notes
         run: |
+          VER="${{ steps.ver.outputs.VERSION }}"
           {
             echo "## Voice Match"
             if [ -f voice-match/CHANGELOG.md ]; then
-              awk -v v="${{ steps.ver.outputs.VERSION }}" '
+              awk -v v="$VER" '
                 $0 ~ "^##[[:space:]]*"v {p=1; print; next}
                 p && /^## / {exit}
                 p {print}
@@ -34,11 +35,19 @@ jobs:
             echo ""
             echo "## Wyoming OpenAI STT"
             if [ -f wyoming-openai-stt/CHANGELOG.md ]; then
-              awk -v v="${{ steps.ver.outputs.VERSION }}" '
+              # Prefer same tag section; fall back to latest ## block if empty
+              STT_NOTES=$(awk -v v="$VER" '
                 $0 ~ "^##[[:space:]]*"v {p=1; print; next}
                 p && /^## / {exit}
                 p {print}
-              ' wyoming-openai-stt/CHANGELOG.md
+              ' wyoming-openai-stt/CHANGELOG.md)
+              if [ -z "$STT_NOTES" ]; then
+                STT_NOTES=$(awk '
+                  /^## / { if (seen++) exit; print; next }
+                  seen { print }
+                ' wyoming-openai-stt/CHANGELOG.md)
+              fi
+              echo "$STT_NOTES"
             fi
           } > /tmp/notes.md
           echo "path=/tmp/notes.md" >> $GITHUB_OUTPUT

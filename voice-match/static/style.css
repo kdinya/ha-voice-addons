@@ -72,7 +72,6 @@ header h1 { font-size: 1.6rem; font-weight: 700; }
 }
 .field.row input { flex: 1; }
 
-/* Unified input + select look */
 input[type="text"],
 .select-wrap select {
   width: 100%;
@@ -319,19 +318,7 @@ footer {
   white-space: nowrap;
 }
 
-.actions-card .actions-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-.actions-card .actions-row .btn {
-  min-width: 10rem;
-}
-
-/* Mobile */
 @media (max-width: 480px) {
   body { padding: 1rem; }
   .btn.small { min-width: 4.8rem; }
-  .actions-card .actions-row .btn { flex: 1 1 auto; }
 }
