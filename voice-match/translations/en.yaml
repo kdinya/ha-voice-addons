@@ -36,6 +36,12 @@ configuration:
   save_rejected:
     name: "Save rejected samples"
     description: "Keep audio that failed verification."
+  early_reject:
+    name: "Early reject (no 60s wait)"
+    description: >-
+      If the voice does not match (or silence), immediately return an empty
+      transcript so the tablet/satellite stops listening instead of waiting
+      ~60 seconds. Leave enabled. Disable only for diagnostics.
   log_level:
     name: "Log level"
     description: "DEBUG / INFO / WARNING / ERROR"

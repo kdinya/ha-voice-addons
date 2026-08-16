@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.5
+- **Fix: 60 с listening на тиші** — при early-reject (немає мови / чужий голос) одразу повертається порожній Transcript, щоб Voice Satellite / HA не чекали max session timeout
+- Новий параметр **early_reject** (за замовчуванням `true`) — можна вимкнути для діагностики
+- Оновлені переклади (uk / en / ru)
+
 ## 2.0.4
 - Виправлено відсутній endpoint `/api/analyze_blob` (перевірка запису з мікрофона перед Save)
 - Синхронізовано `__version__` у пакеті
@@ -38,6 +43,3 @@
 - Покращені кнопки видалення та Restart
 
 ## 1.5.0
-- Запис → WAV 16 kHz mono
-- Перевірка якості зразків
-- GitHub Actions авто-Release
