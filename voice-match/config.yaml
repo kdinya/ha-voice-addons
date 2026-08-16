@@ -1,5 +1,5 @@
 name: "Voice Match"
-version: "2.0.6"
+version: "2.0.7"
 slug: "voice_match"
 description: "Верифікація голосу для Home Assistant. Повністю автономний. Hot-reload voiceprints — рестарт після enrollment більше не потрібен."
 url: "https://github.com/kdinya/ha-voice-addons"
@@ -32,7 +32,6 @@ options:
   tag_speaker: false
   require_speaker_match: true
   save_rejected: false
-  early_reject: true
   log_level: "INFO"
 schema:
   upstream_uri: "str"
@@ -45,5 +44,4 @@ schema:
   tag_speaker: "bool"
   require_speaker_match: "bool"
   save_rejected: "bool"
-  early_reject: "bool"
   log_level: "list(DEBUG|INFO|WARNING|ERROR)"
