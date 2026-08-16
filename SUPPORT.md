@@ -9,17 +9,28 @@
    https://github.com/sponsors/kdinya  
    *(увімкни Sponsors у налаштуваннях GitHub, якщо ще не активні)*
 
-2. **Зірка ⭐** на репозиторії — допомагає іншим знайти проєкт
+2. **Buy Me a Coffee**  
+   https://www.buymeacoffee.com/kdinya
 
-3. **Issue / PR** — баг-репорти, переклади, документація теж цінні
+3. **Patreon**  
+   https://www.patreon.com/kdinya
 
-4. **Поділитися** — пост у спільнотах Home Assistant (укр / ru / EN)
+4. **Liberapay**  
+   https://liberapay.com/kdinya
+
+5. **Зірка ⭐** на репозиторії — допомагає іншим знайти проєкт
+
+6. **Issue / PR** — баг-репорти, переклади, документація теж цінні
+
+7. **Поділитися** — пост у спільнотах Home Assistant (укр / ru / EN)
+
+> Якщо посилання вище ще не активні — просто створи сторінки з тим самим нікнеймом `kdinya` і вони почнуть працювати.
 
 ---
 
 ## Платна допомога з налаштуванням
 
-Якщо потрібен робочий voice pipeline «під ключ» (планшет, Fully Kiosk, Voice Satellite, STT, Voice Match, мови uk/ru):
+Якщо потрібен робочий voice pipeline «під ключ» (планшет, Kiosk Satellite, Voice Satellite, STT, Voice Match, мови uk/ru):
 
 | Послуга | Що входить |
 |---------|------------|
