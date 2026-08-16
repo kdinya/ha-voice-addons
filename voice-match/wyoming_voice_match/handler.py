@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import logging
+import os
 import time
 import uuid
 import wave
@@ -26,10 +27,23 @@ _LOGGER = logging.getLogger("handler")
 
 _MODEL_LOCK = asyncio.Lock()
 
-# Fast-path thresholds: avoid expensive verify on near-silence / short noise (cough etc.)
-# so Voice Satellite can close the listen session according to its own VAD (e.g. 6s).
-_MIN_DURATION_FOR_VERIFY = 0.8  # seconds — shorter buffers are almost never real speech
-_SILENCE_PEAK_RMS = 150.0       # peak frame RMS below this ≈ silence / very quiet cough
+
+def _env_bool(name: str, default: bool = True) -> bool:
+    return os.environ.get(name, str(default)).lower() in ("true", "1", "yes")
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(float(os.environ.get(name, default)))
+    except (TypeError, ValueError):
+        return default
 
 
 class SpeakerVerifyHandler(AsyncEventHandler):
@@ -39,8 +53,8 @@ class SpeakerVerifyHandler(AsyncEventHandler):
     Kiosk VAD). This handler only buffers audio until AudioStop, then
     verifies the speaker and optionally forwards to upstream STT.
 
-    For near-silence or very short noise (e.g. a cough) we return an empty
-    Transcript immediately so the client is not held by slow verification.
+    Configurable fast-path (2.0.9) returns empty Transcript quickly on
+    near-silence so the client is not held by slow verification.
     """
 
     def __init__(
@@ -71,6 +85,14 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         self._stream_start_time: Optional[float] = None
         self._session_id: str = uuid.uuid4().hex[:8]
 
+        # Configurable silence controls (each can be disabled)
+        self.silence_threshold_enabled = _env_bool("SILENCE_THRESHOLD_ENABLED", True)
+        self.silence_threshold = _env_int("SILENCE_THRESHOLD", 180)
+        self.silence_timeout_enabled = _env_bool("SILENCE_TIMEOUT_ENABLED", True)
+        self.silence_timeout = _env_float("SILENCE_TIMEOUT", 2.0)
+        self.min_speech_duration_enabled = _env_bool("MIN_SPEECH_DURATION_ENABLED", True)
+        self.min_speech_duration = _env_float("MIN_SPEECH_DURATION", 1.0)
+
     async def handle_event(self, event: Event) -> bool:
         if Describe.is_type(event.type):
             await self.write_event(self.wyoming_info.event())
@@ -99,27 +121,56 @@ class SpeakerVerifyHandler(AsyncEventHandler):
             return True
         return True
 
-    def _is_near_silence(self, audio_bytes: bytes, sample_rate: int) -> bool:
-        """True if buffer is too short or has no meaningful energy (silence / quiet cough)."""
-        bps = sample_rate * 2  # 16-bit mono
-        if bps <= 0:
-            return True
-        duration = len(audio_bytes) / bps
-        if duration < _MIN_DURATION_FOR_VERIFY:
-            return True
-        if len(audio_bytes) < sample_rate:  # < 0.5 s of samples
-            return True
+    def _audio_stats(self, audio_bytes: bytes, sample_rate: int) -> dict:
+        """Return duration, peak RMS and mean RMS for the buffer."""
+        bps = sample_rate * 2
+        duration = len(audio_bytes) / bps if bps else 0.0
+        if len(audio_bytes) < sample_rate // 10:  # < 0.1 s
+            return {"duration": duration, "peak": 0.0, "mean": 0.0}
 
         audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32)
-        frame_samples = max(int(sample_rate * 0.05), 1)  # 50 ms frames
+        frame_samples = max(int(sample_rate * 0.05), 1)
         num_frames = len(audio_np) // frame_samples
-        if num_frames < 2:
-            return True
+        if num_frames < 1:
+            peak = float(np.max(np.abs(audio_np))) if len(audio_np) else 0.0
+            return {"duration": duration, "peak": peak, "mean": peak}
 
         frames = audio_np[: num_frames * frame_samples].reshape(num_frames, frame_samples)
         rms = np.sqrt(np.mean(frames ** 2, axis=1))
-        peak = float(np.max(rms))
-        return peak < _SILENCE_PEAK_RMS
+        return {
+            "duration": duration,
+            "peak": float(np.max(rms)),
+            "mean": float(np.mean(rms)),
+        }
+
+    def _should_fast_reject(self, stats: dict) -> tuple[bool, str]:
+        """Decide whether to return empty Transcript without full verify.
+
+        Returns (reject, reason).
+        """
+        duration = stats["duration"]
+        peak = stats["peak"]
+
+        # Rule 1: min speech duration
+        if self.min_speech_duration_enabled and duration < self.min_speech_duration:
+            return True, f"too short ({duration:.1f}s < {self.min_speech_duration}s)"
+
+        # Rule 2: silence energy threshold
+        if self.silence_threshold_enabled and peak < self.silence_threshold:
+            return True, f"near-silence (peak={peak:.0f} < {self.silence_threshold})"
+
+        # Rule 3: silence timeout — short buffer that is still quiet overall
+        if self.silence_timeout_enabled and duration <= self.silence_timeout:
+            # If the whole buffer is within the silence timeout window and
+            # energy is low-ish (2x threshold), treat as silence.
+            soft_limit = self.silence_threshold * 2 if self.silence_threshold_enabled else 300
+            if peak < soft_limit:
+                return True, (
+                    f"silence timeout ({duration:.1f}s <= {self.silence_timeout}s, "
+                    f"peak={peak:.0f})"
+                )
+
+        return False, ""
 
     async def _process_audio(self) -> None:
         """Verify speaker and forward to STT after client ends the stream."""
@@ -137,18 +188,21 @@ class SpeakerVerifyHandler(AsyncEventHandler):
             await self.write_event(Transcript(text="").event())
             return
 
-        # Fast path: near-silence or very short noise (cough, click, etc.)
-        # Do NOT run the heavy ECAPA model — return empty Transcript immediately
-        # so Voice Satellite can close the session on its own VAD timeout (e.g. 6s).
-        if self._is_near_silence(audio_bytes, self._audio_rate):
+        stats = self._audio_stats(audio_bytes, self._audio_rate)
+        reject, reason = self._should_fast_reject(stats)
+
+        if reject:
             _LOGGER.info(
-                "[%s] Near-silence / short noise (%.1fs) — empty transcript (no verify)",
-                sid, audio_duration,
+                "[%s] Fast-reject: %s (duration=%.1fs peak=%.0f) — empty transcript",
+                sid, reason, stats["duration"], stats["peak"],
             )
             await self.write_event(Transcript(text="").event())
             return
 
-        _LOGGER.debug("[%s] Client AudioStop — %.1fs buffered, verifying", sid, audio_duration)
+        _LOGGER.debug(
+            "[%s] Client AudioStop — %.1fs buffered (peak=%.0f), verifying",
+            sid, audio_duration, stats["peak"],
+        )
 
         async with _MODEL_LOCK:
             loop = asyncio.get_running_loop()
