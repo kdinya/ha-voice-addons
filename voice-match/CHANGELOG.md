@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.6
+- **Fix: після кашлю / хибного match більше немає очікування 30 с** — прибрано жорсткий `timeout=30` на AudioStop
+- Тривалість слухання повністю на стороні клієнта (Voice Satellite / Kiosk VAD), аддон лише чекає їхній AudioStop
+- Після успішного verify немає add-on-side deadline
+
 ## 2.0.5
 - **Fix: 60 с listening на тиші** — при early-reject (немає мови / чужий голос) одразу повертається порожній Transcript, щоб Voice Satellite / HA не чекали max session timeout
 - Новий параметр **early_reject** (за замовчуванням `true`) — можна вимкнути для діагностики
