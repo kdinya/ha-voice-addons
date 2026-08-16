@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.7
+- **Listening duration fully client-owned** — removed early reject and all add-on listen timeouts
+- Handler only buffers until client AudioStop (Voice Satellite / Kiosk VAD), then verifies and forwards
+- Removed `early_reject` config option (no longer needed)
+- No more 5s/30s/60s session control from the add-on
+
 ## 2.0.6
 - **Fix: після кашлю / хибного match більше немає очікування 30 с** — прибрано жорсткий `timeout=30` на AudioStop
 - Тривалість слухання повністю на стороні клієнта (Voice Satellite / Kiosk VAD), аддон лише чекає їхній AudioStop
