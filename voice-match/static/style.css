@@ -275,7 +275,7 @@ footer {
 
 .hidden { display: none !important; }
 
-.rec-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; }
+.rec-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
 .rec-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
 .rec-audio { width: 100%; margin-top: 0.5rem; }
 
@@ -316,6 +316,38 @@ footer {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Live silence meter */
+.meter-wrap {
+  background: var(--input-bg);
+  border-radius: 8px;
+  padding: 0.5rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+}
+.meter-bar {
+  height: 28px;
+  width: 0%;
+  max-width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--success) 0%, var(--warn) 55%, var(--danger) 100%);
+  transition: width 0.08s linear;
+}
+.meter-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+  padding: 0 0.15rem;
+}
+.meter-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
 }
 
 @media (max-width: 480px) {
