@@ -77,7 +77,7 @@
 
     <section class="card">
       <h2>5. Enrollment</h2>
-      <p class="hint">Після 3–5 OK-зразків натисніть Enrollment — створюється voiceprint. Потім обов’язково Restart аддона.</p>
+      <p class="hint">Після 3–5 OK-зразків натисніть Enrollment — створюється voiceprint і <strong>одразу активний</strong> (hot-reload, рестарт не потрібен).</p>
       <div class="field row">
         <input type="text" id="enroll-speaker" placeholder="спікер" pattern="[a-z0-9_\-]{1,32}">
         <button type="button" class="btn primary" id="btn-enroll">▶ Enrollment</button>
@@ -87,19 +87,8 @@
 
     <section class="card">
       <h2>6. Voiceprints</h2>
-      <p class="hint">Збережені відбитки голосу. Після видалення теж потрібен Restart.</p>
+      <p class="hint">Збережені відбитки голосу. Після видалення voiceprint зміни застосовуються одразу (hot-reload).</p>
       <div id="voiceprint-list"><p class="empty">…</p></div>
-    </section>
-
-    <section class="card actions-card">
-      <h2>Restart аддона</h2>
-      <p class="hint">Після Enrollment (або видалення voiceprint) обов’язково перезапустіть аддон, інакше voiceprint не підхопиться. «Restart зараз» надсилає команду через Supervisor. Або відкрийте сторінку аддона і натисніть Restart там.</p>
-      <div class="actions-row">
-        <button type="button" class="btn primary" id="btn-restart">🔄 Restart зараз</button>
-        <button type="button" class="btn secondary" id="btn-addon-page">Відкрити сторінку аддона</button>
-      </div>
-      <p id="restart-status" class="hint"></p>
-      <p id="restart-hint" class="hint warn hidden">⚠ Voiceprint оновлено — зробіть Restart, інакше зміни не застосуються.</p>
     </section>
 
     <footer>

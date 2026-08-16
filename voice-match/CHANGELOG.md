@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.3
+- Прибрано кнопки Restart з UI (hot-reload — рестарт більше не потрібен)
+- Виправлено DOCS.md: дефолти порогів і hot-reload узгоджені з config.yaml
+- Оновлені підказки в UI після Enrollment / видалення voiceprint
+- Покращено Dockerfile (HEALTHCHECK, чіткіші залежності)
+- Додано LICENSE (MIT)
+- Розширено .gitignore
+
 ## 2.0.2
 - Виправлено SyntaxError у handler.py (зламана відступність)
 

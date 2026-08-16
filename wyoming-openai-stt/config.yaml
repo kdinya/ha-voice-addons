@@ -1,5 +1,5 @@
 name: "Wyoming OpenAI STT"
-version: "1.5.2"
+version: "1.5.3"
 slug: "wyoming_openai_stt"
 description: "Розпізнавання мови через Groq або OpenAI (українська та російська). Працює як Wyoming STT для Home Assistant і як upstream для Voice Match."
 url: "https://github.com/kdinya/ha-voice-addons"
