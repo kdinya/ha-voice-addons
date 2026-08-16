@@ -123,12 +123,14 @@
     measureTimer = setTimeout(function () {
       measuring = false;
       measureTimer = null;
-      var rec = "Рекомендований поріг тиші: ≈ " + Math.min(400, Math.max(80, meterMax + 40));
+      // Єдина формула: макс фону + запас 40, не нижче 50 (мін. schema), не вище 400
+      var recommended = Math.min(400, Math.max(50, meterMax + 40));
       $("measure-result").textContent =
         "Виміряно за 3 с — поточне ≈ " + ($("meter-current").textContent) +
-        ", максимальне = " + meterMax + ". " + rec +
-        ". Поставте це значення в Configuration → Поріг тиші.";
-      flash("Макс під час тиші: " + meterMax + ". Рекомендований поріг ≈ " + Math.min(400, meterMax + 40), "success");
+        ", максимальне = " + meterMax +
+        ". Рекомендований поріг тиші: ≈ " + recommended +
+        " (макс + 40, мін. 50). Поставте в Configuration → Поріг тиші.";
+      flash("Макс під час тиші: " + meterMax + ". Рекомендований поріг ≈ " + recommended, "success");
     }, 3000);
   });
 

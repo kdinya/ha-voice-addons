@@ -1,5 +1,5 @@
 name: "Voice Match"
-version: "2.0.10"
+version: "2.0.11"
 slug: "voice_match"
 description: "Верифікація голосу для Home Assistant. Повністю автономний. Hot-reload voiceprints — рестарт після enrollment більше не потрібен."
 url: "https://github.com/kdinya/ha-voice-addons"
