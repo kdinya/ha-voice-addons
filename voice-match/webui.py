@@ -8,7 +8,6 @@ import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 import wave
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -283,6 +282,35 @@ def upload_recording():
     if not ok:
         return jsonify({"ok": False, "message": err}), 500
     return jsonify({"ok": True, "message": f"Збережено {dest.name}", "analysis": analyze_wav(dest), "need_enroll": True})
+
+
+@app.route("/api/analyze_blob", methods=["POST"])
+def api_analyze_blob():
+    """Analyze microphone recording before save (convert → quality check)."""
+    f = request.files.get("audio")
+    if not f:
+        return jsonify({"ok": False, "quality": "bad", "message": "Немає аудіо."}), 400
+    tmp_dir = Path("/tmp")
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(f.filename or "rec.webm").suffix.lower() or ".webm"
+    if suffix not in ALLOWED_EXTENSIONS and suffix != ".webm":
+        suffix = ".webm"
+    src = tmp_dir / f"analyze_{int(time.time() * 1000)}{suffix}"
+    dest = tmp_dir / f"analyze_{int(time.time() * 1000)}.wav"
+    try:
+        f.save(str(src))
+        ok, err = convert_to_wav(src, dest)
+        if not ok:
+            return jsonify({"ok": False, "quality": "bad", "message": err or "Конвертація не вдалася"})
+        info = analyze_wav(dest)
+        info["ok"] = info.get("quality") != "bad"
+        return jsonify(info)
+    finally:
+        for p in (src, dest):
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 @app.route("/enroll", methods=["POST"])

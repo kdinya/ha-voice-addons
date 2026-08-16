@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.4
+- Виправлено відсутній endpoint `/api/analyze_blob` (перевірка запису з мікрофона перед Save)
+- Синхронізовано `__version__` у пакеті
+- Прибрано `hassio_role: manager` (достатньо hassio_api для Supervisor info)
+- Прибрано мертвий CSS Restart-секції
+- Pin базового образу STT, CI, SECURITY.md, примітка про перший старт
+
 ## 2.0.3
 - Прибрано кнопки Restart з UI (hot-reload — рестарт більше не потрібен)
 - Виправлено DOCS.md: дефолти порогів і hot-reload узгоджені з config.yaml

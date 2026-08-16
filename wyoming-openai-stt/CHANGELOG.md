@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.4
+- Pin базового образу `ghcr.io/roryeckel/wyoming_openai:0.5.0` (замість `:latest`)
+- Синхронізація з Voice Match 2.0.4
+
+## 1.5.4
+- Pin базового образу на 0.5.0
+
 ## 1.5.3
 - Синхронізація з Voice Match 2.0.3
 
