@@ -1,10 +1,11 @@
 # Changelog
 
 ## 2.0.14
-- **Fix: Early-endpoint не спрацьовував на тиші/кашлі** — сплеск `peak` (кашель, клік) більше не вважається «мовою»
-- Early-endpoint тепер використовує ті самі правила, що й Fast-reject (mean / quiet-ratio / mostly-quiet)
-- Реальна мова (високий mean або quiet < 55%) як і раніше чекає AudioStop
-- Пояснення: 15 с очікування йшло від HA VAD (`stt-vad-end timestamp=15000`), бо аддон не надсилав порожній Transcript раніше
+- **Fix: early-endpoint реально обриває pipeline з HA**
+- HA Wyoming STT читає `Transcript` лише ПІСЛЯ повного стріму (`AudioStop`) — ранній Transcript раніше ігнорувався
+- При тиші: empty Transcript + Error(no-speech) + **закриття TCP** → HA отримує OSError і одразу abort STT (без 15–30 с VAD/AI)
+- Дефолт `silence_timeout` = 1.5 с
+- Peak-сплеск (кашель) більше не блокує early-endpoint
 
 ## 2.0.13
 - **Early-endpoint при тиші** — якщо з початку стріму немає мови, порожній `Transcript` надсилається через ~`silence_timeout` с (за замовч. 2 с), **не чекаючи** AudioStop від Satellite
