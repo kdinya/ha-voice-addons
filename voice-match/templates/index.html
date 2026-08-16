@@ -10,20 +10,42 @@
   <div class="container">
     <header>
       <h1>🎤 Voice Match</h1>
-      <p class="subtitle">Запис WAV · перевірка якості · enrollment · voiceprint</p>
+      <p class="subtitle">Запис WAV · перевірка якості · enrollment · voiceprint · калібрування тиші</p>
     </header>
 
     <div id="flash-box"></div>
 
     <section class="card">
-      <h2>0. Пошук Wyoming STT</h2>
+      <h2>0. Калібрування тиші</h2>
+      <p class="hint">Живий рівень звуку (RMS). Використовуйте, щоб підібрати <strong>Поріг тиші</strong> у Configuration аддона (50–400). Кнопка «Виміряти тишу» 3 с слухає фон і показує поточне / максимальне значення.</p>
+      <div class="meter-wrap">
+        <div class="meter-bar" id="meter-bar"></div>
+        <div class="meter-labels">
+          <span>0</span><span>100</span><span>200</span><span>300</span><span>400+</span>
+        </div>
+      </div>
+      <div class="meter-stats">
+        <span>Зараз: <strong id="meter-current">—</strong></span>
+        <span>Макс: <strong id="meter-max">—</strong></span>
+        <span id="meter-status" class="hint">Мікрофон вимкнено</span>
+      </div>
+      <div class="rec-row" style="margin-top:0.75rem">
+        <button type="button" class="btn secondary" id="btn-meter-toggle">▶ Увімкнути індикатор</button>
+        <button type="button" class="btn primary" id="btn-measure-silence">📏 Виміряти тишу (3 с)</button>
+      </div>
+      <p id="measure-result" class="hint"></p>
+      <p class="hint" style="margin-top:0.5rem">Рекомендація: поставте <em>Поріг тиші</em> трохи вище за «Макс» під час вимірювання фону (наприклад макс 120 → поріг 150–180).</p>
+    </section>
+
+    <section class="card">
+      <h2>1. Пошук Wyoming STT</h2>
       <p class="hint">Поточний upstream: <code id="current-upstream">—</code>. Якщо порожньо — натисніть «Сканувати» і скопіюйте URI у Configuration аддона.</p>
       <button type="button" class="btn secondary" id="btn-scan">🔍 Сканувати</button>
       <div id="scan-results" class="scan-results hidden"></div>
     </section>
 
     <section class="card">
-      <h2>1. Спікер</h2>
+      <h2>2. Спікер</h2>
       <p class="hint">Оберіть існуючого спікера зі списку або введіть нове ім’я латиницею (a–z, 0–9, _, −).</p>
       <div class="field">
         <label for="speaker-select">Існуючий спікер</label>
@@ -41,7 +63,7 @@
     </section>
 
     <section class="card">
-      <h2>2. Запис з мікрофона → WAV</h2>
+      <h2>3. Запис з мікрофона → WAV</h2>
       <p class="hint">Запис → Стоп → Перевірити (тривалість, гучність) → Зберегти або Видалити. Бажано 3–10 секунд чистої мови.</p>
       <div class="rec-row">
         <button type="button" class="btn danger" id="btn-rec">🔴 Запис</button>
@@ -57,7 +79,7 @@
     </section>
 
     <section class="card">
-      <h2>3. Файли з диска</h2>
+      <h2>4. Файли з диска</h2>
       <p class="hint">Будь-який формат (wav, flac, mp3, ogg, webm…) → на сервері конвертується в WAV 16 kHz mono.</p>
       <div class="dropzone" id="dropzone">
         <input type="file" id="files" multiple accept="audio/*,.wav,.flac,.ogg,.mp3,.webm">
@@ -68,7 +90,7 @@
     </section>
 
     <section class="card">
-      <h2>4. Зразки</h2>
+      <h2>5. Зразки</h2>
       <p class="hint">Після збереження записів перевірте якість. Залиште 3–5 зразків зі статусом OK.</p>
       <button type="button" class="btn secondary" id="btn-check-all">Перевірити всі зразки</button>
       <div id="quality-box" class="hidden"></div>
@@ -76,7 +98,7 @@
     </section>
 
     <section class="card">
-      <h2>5. Enrollment</h2>
+      <h2>6. Enrollment</h2>
       <p class="hint">Після 3–5 OK-зразків натисніть Enrollment — створюється voiceprint і <strong>одразу активний</strong> (hot-reload, рестарт не потрібен).</p>
       <div class="field row">
         <input type="text" id="enroll-speaker" placeholder="спікер" pattern="[a-z0-9_\-]{1,32}">
@@ -86,13 +108,13 @@
     </section>
 
     <section class="card">
-      <h2>6. Voiceprints</h2>
+      <h2>7. Voiceprints</h2>
       <p class="hint">Збережені відбитки голосу. Після видалення voiceprint зміни застосовуються одразу (hot-reload).</p>
       <div id="voiceprint-list"><p class="empty">…</p></div>
     </section>
 
     <footer>
-      <p>Wyoming Protocol → порт <strong>10350</strong>. Без перевірки голосу: у Configuration вимкніть «Вимагати збіг голосу».</p>
+      <p>Wyoming Protocol → порт <strong>10350</strong>. Налаштування тиші (поріг / таймаут / мін. довжина) — у Configuration аддона. Без перевірки голосу: вимкніть «Вимагати збіг голосу».</p>
     </footer>
   </div>
   <script src="static/app.js"></script>
