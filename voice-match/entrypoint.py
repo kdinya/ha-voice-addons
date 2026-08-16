@@ -47,6 +47,7 @@ def main() -> None:
         "true" if options.get("require_speaker_match", True) else "false"
     )
     env["SAVE_REJECTED"] = "true" if options.get("save_rejected", False) else "false"
+    env["EARLY_REJECT"] = "true" if options.get("early_reject", True) else "false"
     env["LOG_LEVEL"] = str(options.get("log_level", "INFO"))
     env["DEVICE"] = "cpu"
     env["PYTHONPATH"] = "/app"
