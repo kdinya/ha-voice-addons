@@ -1,4 +1,10 @@
-# GitHub shows a Sponsor button when this file is present.
-# Enable Sponsors: https://github.com/sponsors/kdinya (activate if needed)
+# These are supported funding model platforms
 
 github: [kdinya]
+
+# Buy Me a Coffee / Patreon / Liberapay
+# Replace the URLs below with your real pages after creating them
+custom:
+  - "https://www.buymeacoffee.com/kdinya"
+  - "https://www.patreon.com/kdinya"
+  - "https://liberapay.com/kdinya"
