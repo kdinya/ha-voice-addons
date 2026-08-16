@@ -192,7 +192,7 @@ def _run_quality_check(speaker: str) -> dict:
         "ok": True,
         "message": f"Перевірено {len(scores)}, OK: {ok_count}",
         "scores": scores,
-        "recommendation": "Видаліть bad/weak. 3–5 OK → Enrollment. Restart більше НЕ потрібен.",
+        "recommendation": "Видаліть bad/weak. 3–5 OK → Enrollment. Restart більше НЕ потрібен (hot-reload).",
     }
 
 
@@ -220,13 +220,6 @@ def get_self_addon_info() -> dict:
     return {"ok": True, "slug": slug, "name": info.get("name") or "Voice Match",
             "state": info.get("state"), "version": info.get("version"),
             "paths": [f"/config/app/{slug}/info", f"/hassio/addon/{slug}/info"]}
-
-
-def restart_self_addon() -> dict:
-    data, err = _supervisor_request("/addons/self/restart", method="POST", timeout=15)
-    if err:
-        return {"ok": False, "message": f"Restart не вдався: {err}"}
-    return {"ok": True, "message": "Restart надіслано."}
 
 
 @app.route("/")
@@ -364,11 +357,6 @@ def api_check_quality():
     if not SPEAKER_RE.match(speaker):
         return jsonify({"ok": False}), 400
     return jsonify(_run_quality_check(speaker))
-
-
-@app.route("/api/restart", methods=["POST"])
-def api_restart():
-    return jsonify(restart_self_addon())
 
 
 @app.route("/api/addon_info")
