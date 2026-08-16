@@ -122,52 +122,90 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         return True
 
     def _audio_stats(self, audio_bytes: bytes, sample_rate: int) -> dict:
-        """Return duration, peak RMS and mean RMS for the buffer."""
+        """Return duration, peak/mean RMS and quiet-frame ratio for the buffer.
+
+        RMS is computed on int16 samples in 50 ms frames (server scale ~50–8000+).
+        This is NOT the same scale as the browser silence meter in the Web UI.
+        """
         bps = sample_rate * 2
         duration = len(audio_bytes) / bps if bps else 0.0
+        empty = {
+            "duration": duration, "peak": 0.0, "mean": 0.0,
+            "p90": 0.0, "quiet_ratio": 1.0, "num_frames": 0,
+        }
         if len(audio_bytes) < sample_rate // 10:  # < 0.1 s
-            return {"duration": duration, "peak": 0.0, "mean": 0.0}
+            return empty
 
         audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32)
         frame_samples = max(int(sample_rate * 0.05), 1)
         num_frames = len(audio_np) // frame_samples
         if num_frames < 1:
             peak = float(np.max(np.abs(audio_np))) if len(audio_np) else 0.0
-            return {"duration": duration, "peak": peak, "mean": peak}
+            return {
+                "duration": duration, "peak": peak, "mean": peak,
+                "p90": peak, "quiet_ratio": 1.0 if peak < 180 else 0.0,
+                "num_frames": 1,
+            }
 
         frames = audio_np[: num_frames * frame_samples].reshape(num_frames, frame_samples)
         rms = np.sqrt(np.mean(frames ** 2, axis=1))
+        thr = float(self.silence_threshold) if self.silence_threshold_enabled else 180.0
+        quiet_ratio = float(np.mean(rms < thr))
         return {
             "duration": duration,
             "peak": float(np.max(rms)),
             "mean": float(np.mean(rms)),
+            "p90": float(np.percentile(rms, 90)),
+            "quiet_ratio": quiet_ratio,
+            "num_frames": int(num_frames),
         }
 
     def _should_fast_reject(self, stats: dict) -> tuple[bool, str]:
         """Decide whether to return empty Transcript without full verify.
 
-        Returns (reject, reason).
+        Uses mean / p90 / quiet-frame ratio so a single click does not force
+        a full ECAPA pass on an otherwise silent buffer.
         """
         duration = stats["duration"]
         peak = stats["peak"]
+        mean = stats.get("mean", peak)
+        p90 = stats.get("p90", peak)
+        quiet_ratio = stats.get("quiet_ratio", 0.0)
 
         # Rule 1: min speech duration
         if self.min_speech_duration_enabled and duration < self.min_speech_duration:
             return True, f"too short ({duration:.1f}s < {self.min_speech_duration}s)"
 
-        # Rule 2: silence energy threshold
-        if self.silence_threshold_enabled and peak < self.silence_threshold:
-            return True, f"near-silence (peak={peak:.0f} < {self.silence_threshold})"
+        if not self.silence_threshold_enabled:
+            return False, ""
 
-        # Rule 3: silence timeout — short buffer that is still quiet overall
+        thr = float(self.silence_threshold)
+
+        # Rule 2: whole buffer is quiet by peak
+        if peak < thr:
+            return True, f"near-silence (peak={peak:.0f} < {thr:.0f})"
+
+        # Rule 3: average energy is below threshold (long silence with rare spikes)
+        if mean < thr:
+            return True, (
+                f"near-silence mean (mean={mean:.0f} < {thr:.0f}, "
+                f"peak={peak:.0f}, quiet={quiet_ratio:.0%})"
+            )
+
+        # Rule 4: most frames are quiet (e.g. 85%+ below threshold) — ambient only
+        if quiet_ratio >= 0.85 and p90 < thr * 2.5:
+            return True, (
+                f"mostly-quiet frames (quiet={quiet_ratio:.0%}, "
+                f"p90={p90:.0f}, peak={peak:.0f}, thr={thr:.0f})"
+            )
+
+        # Rule 5: short buffer within silence_timeout with soft energy
         if self.silence_timeout_enabled and duration <= self.silence_timeout:
-            # If the whole buffer is within the silence timeout window and
-            # energy is low-ish (2x threshold), treat as silence.
-            soft_limit = self.silence_threshold * 2 if self.silence_threshold_enabled else 300
-            if peak < soft_limit:
+            soft_limit = thr * 2
+            if peak < soft_limit or mean < thr * 1.5:
                 return True, (
                     f"silence timeout ({duration:.1f}s <= {self.silence_timeout}s, "
-                    f"peak={peak:.0f})"
+                    f"peak={peak:.0f}, mean={mean:.0f})"
                 )
 
         return False, ""
@@ -193,15 +231,22 @@ class SpeakerVerifyHandler(AsyncEventHandler):
 
         if reject:
             _LOGGER.info(
-                "[%s] Fast-reject: %s (duration=%.1fs peak=%.0f) — empty transcript",
-                sid, reason, stats["duration"], stats["peak"],
+                "[%s] Fast-reject: %s (duration=%.1fs peak=%.0f mean=%.0f) — empty transcript",
+                sid, reason, stats["duration"], stats["peak"], stats.get("mean", 0.0),
             )
             await self.write_event(Transcript(text="").event())
             return
 
-        _LOGGER.debug(
-            "[%s] Client AudioStop — %.1fs buffered (peak=%.0f), verifying",
-            sid, audio_duration, stats["peak"],
+        # Always log energy so user can calibrate silence_threshold from real server scale
+        _LOGGER.info(
+            "[%s] AudioStop — %.1fs peak=%.0f mean=%.0f p90=%.0f quiet=%.0f%% thr=%d → verifying",
+            sid,
+            audio_duration,
+            stats["peak"],
+            stats.get("mean", 0.0),
+            stats.get("p90", 0.0),
+            stats.get("quiet_ratio", 0.0) * 100,
+            self.silence_threshold,
         )
 
         async with _MODEL_LOCK:
