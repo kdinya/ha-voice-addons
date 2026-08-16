@@ -15,6 +15,7 @@ from typing import Optional
 import numpy as np
 
 from wyoming.asr import Transcribe, Transcript
+from wyoming.error import Error
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.client import AsyncClient
 from wyoming.event import Event
@@ -195,10 +196,53 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         self._responded = True
         _LOGGER.info(
             "[%s] Early-endpoint: %s (%.1fs peak=%.0f mean=%.0f p90=%.0f quiet=%.0f%% thr=%.0f) "
-            "— empty transcript (client still streaming)",
+            "— empty transcript + close connection (force HA STT abort)",
             sid, reason, duration, peak, mean, p90, quiet_ratio * 100, thr,
         )
-        await self.write_event(Transcript(text="").event())
+        # HA wyoming STT client only READS after it finishes WRITING the whole
+        # stream (AudioStop). An early Transcript sits unread in the TCP buffer
+        # until then — so it does NOT shorten the listen window by itself.
+        # Closing the socket makes HA's next write_event fail with OSError,
+        # which aborts STT immediately (no 15–30s wait for VAD / AI).
+        try:
+            await self.write_event(Transcript(text="").event())
+        except Exception:
+            _LOGGER.debug("[%s] Early-endpoint: transcript write failed", sid, exc_info=True)
+        try:
+            await self.write_event(
+                Error(text="silence", code="no-speech").event()
+            )
+        except Exception:
+            pass
+        await self._force_disconnect()
+
+    async def _force_disconnect(self) -> None:
+        """Close the Wyoming TCP connection so HA aborts the STT write loop."""
+        writer = getattr(self, "writer", None) or getattr(self, "_writer", None)
+        if writer is None:
+            # Fallback: some wyoming versions keep transport on the stream writer
+            for attr in ("_writer", "writer", "transport"):
+                obj = getattr(self, attr, None)
+                if obj is not None:
+                    writer = obj
+                    break
+        if writer is None:
+            _LOGGER.warning(
+                "[%s] Early-endpoint: no writer to close — HA may still wait for AudioStop",
+                self._session_id,
+            )
+            return
+        try:
+            if hasattr(writer, "close"):
+                writer.close()
+            if hasattr(writer, "wait_closed"):
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+            _LOGGER.info("[%s] Early-endpoint: connection closed", self._session_id)
+        except Exception:
+            _LOGGER.debug("[%s] Early-endpoint: close failed", self._session_id, exc_info=True)
 
     def _audio_stats(self, audio_bytes: bytes, sample_rate: int) -> dict:
         """Return duration, peak/mean RMS and quiet-frame ratio for the buffer.

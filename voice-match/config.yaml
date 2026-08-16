@@ -36,7 +36,7 @@ options:
   silence_threshold_enabled: true
   silence_threshold: 180
   silence_timeout_enabled: true
-  silence_timeout: 2.0
+  silence_timeout: 1.5
   min_speech_duration_enabled: true
   min_speech_duration: 1.0
   early_endpoint_enabled: true

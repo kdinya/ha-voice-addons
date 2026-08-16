@@ -71,6 +71,4 @@ configuration:
   early_endpoint_enabled:
     name: "Раннее завершение при тишине"
     description: >-
-      Если с начала сессии только тишина — отправить пустой Transcript примерно через
-      silence_timeout секунд, не дожидаясь AudioStop от Voice Satellite. Satellite быстрее
-      закрывает pipeline и не ждёт ответ AI/TTS. После реальной речи не срабатывает.
+      Если с начала сессии только тишина — через ~silence_timeout секунд отправить пустой Transcript и закрыть соединение с HA. HA сразу обрывает STT (не ждёт AudioStop / AI / TTS). Для реальной речи не срабатывает.

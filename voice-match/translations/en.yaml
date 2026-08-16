@@ -67,6 +67,4 @@ configuration:
   early_endpoint_enabled:
     name: "Early endpoint on silence"
     description: >-
-      If the stream is pure silence from the start, send an empty Transcript after about
-      silence_timeout seconds without waiting for client AudioStop. Lets Voice Satellite
-      close the pipeline faster (no AI/TTS wait). Does not trigger after real speech.
+      If the stream is silence from the start — after ~silence_timeout seconds send an empty Transcript and close the HA connection. HA aborts STT immediately (no wait for AudioStop / AI / TTS). Does not fire after real speech.
