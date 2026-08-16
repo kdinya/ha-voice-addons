@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.8
+- **Fix: кашель / коротка тиша більше не тримає сесію 30 с**
+- Додано швидкий шлях (fast-path): якщо буфер дуже короткий або майже тиша — одразу повертається порожній `Transcript` **без** запуску важкої моделі ECAPA
+- Voice Satellite знову може закривати слухання за своїм VAD (наприклад 6 с)
+- Тривалість слухання як і раніше повністю на клієнті — аддон лише не блокує його своєю обробкою
+
 ## 2.0.7
 - **Listening duration fully client-owned** — removed early reject and all add-on listen timeouts
 - Handler only buffers until client AudioStop (Voice Satellite / Kiosk VAD), then verifies and forwards
