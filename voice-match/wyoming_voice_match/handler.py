@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
+
 from wyoming.asr import Transcribe, Transcript
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.client import AsyncClient
@@ -24,6 +26,11 @@ _LOGGER = logging.getLogger("handler")
 
 _MODEL_LOCK = asyncio.Lock()
 
+# Fast-path thresholds: avoid expensive verify on near-silence / short noise (cough etc.)
+# so Voice Satellite can close the listen session according to its own VAD (e.g. 6s).
+_MIN_DURATION_FOR_VERIFY = 0.8  # seconds — shorter buffers are almost never real speech
+_SILENCE_PEAK_RMS = 150.0       # peak frame RMS below this ≈ silence / very quiet cough
+
 
 class SpeakerVerifyHandler(AsyncEventHandler):
     """Wyoming ASR handler that gates transcription on speaker identity.
@@ -31,6 +38,9 @@ class SpeakerVerifyHandler(AsyncEventHandler):
     Listening duration is owned entirely by the client (Voice Satellite /
     Kiosk VAD). This handler only buffers audio until AudioStop, then
     verifies the speaker and optionally forwards to upstream STT.
+
+    For near-silence or very short noise (e.g. a cough) we return an empty
+    Transcript immediately so the client is not held by slow verification.
     """
 
     def __init__(
@@ -89,6 +99,28 @@ class SpeakerVerifyHandler(AsyncEventHandler):
             return True
         return True
 
+    def _is_near_silence(self, audio_bytes: bytes, sample_rate: int) -> bool:
+        """True if buffer is too short or has no meaningful energy (silence / quiet cough)."""
+        bps = sample_rate * 2  # 16-bit mono
+        if bps <= 0:
+            return True
+        duration = len(audio_bytes) / bps
+        if duration < _MIN_DURATION_FOR_VERIFY:
+            return True
+        if len(audio_bytes) < sample_rate:  # < 0.5 s of samples
+            return True
+
+        audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32)
+        frame_samples = max(int(sample_rate * 0.05), 1)  # 50 ms frames
+        num_frames = len(audio_np) // frame_samples
+        if num_frames < 2:
+            return True
+
+        frames = audio_np[: num_frames * frame_samples].reshape(num_frames, frame_samples)
+        rms = np.sqrt(np.mean(frames ** 2, axis=1))
+        peak = float(np.max(rms))
+        return peak < _SILENCE_PEAK_RMS
+
     async def _process_audio(self) -> None:
         """Verify speaker and forward to STT after client ends the stream."""
         sid = self._session_id
@@ -102,6 +134,17 @@ class SpeakerVerifyHandler(AsyncEventHandler):
 
         if len(audio_bytes) == 0:
             _LOGGER.debug("[%s] Empty audio buffer — returning empty transcript", sid)
+            await self.write_event(Transcript(text="").event())
+            return
+
+        # Fast path: near-silence or very short noise (cough, click, etc.)
+        # Do NOT run the heavy ECAPA model — return empty Transcript immediately
+        # so Voice Satellite can close the session on its own VAD timeout (e.g. 6s).
+        if self._is_near_silence(audio_bytes, self._audio_rate):
+            _LOGGER.info(
+                "[%s] Near-silence / short noise (%.1fs) — empty transcript (no verify)",
+                sid, audio_duration,
+            )
             await self.write_event(Transcript(text="").event())
             return
 
