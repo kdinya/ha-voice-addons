@@ -32,10 +32,11 @@
 
 ## Voice Match 2.0 — коротко
 
-**Нове в 2.0.0:**
+**Нове в 2.0.x:**
 - Повністю автономний (не залежить від чужого образу)
 - **Hot-reload** — після Enrollment рестарт більше НЕ потрібен
 - М’якші пороги за замовчуванням (0.35 / 0.30)
+- У 2.0.3 прибрано кнопки Restart з UI (вони більше не потрібні)
 
 1. У Configuration вкажіть **upstream_uri** (`Адреса Wyoming STT`), напр. `tcp://homeassistant:10300`.
 2. Відкрийте панель **Voice Match**:
@@ -72,8 +73,8 @@
 ## Релізи
 
 ```bash
-git tag 2.0.0
-git push origin 2.0.0
+git tag 2.0.3
+git push origin 2.0.3
 ```
 
 GitHub Action створить Release з текстом із CHANGELOG.

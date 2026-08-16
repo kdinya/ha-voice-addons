@@ -8,13 +8,13 @@ configuration:
   verify_threshold:
     name: "Voice verification threshold"
     description: >-
-      Similarity threshold (0–1). Higher = stricter. Default 0.40.
+      Similarity threshold (0–1). Higher = stricter. Default 0.35.
       Does not affect transcription quality — only who is accepted.
   extraction_threshold:
     name: "Segment extraction threshold"
     description: >-
-      Strips TV/other voices before STT. Default 0.35.
-      If your words are cut off, lower to 0.28–0.32.
+      Strips TV/other voices before STT. Default 0.30.
+      If your words are cut off, lower to 0.25–0.28.
   max_verify_seconds:
     name: "Max first verification length"
     description: "Seconds of audio for the first verification pass. Default 5."
