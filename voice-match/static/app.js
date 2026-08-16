@@ -6,12 +6,114 @@
   const flashBox = $("flash-box");
 
   let mediaRecorder = null, recChunks = [], recBlob = null, recording = false;
-  let pendingEnrollment = false; // samples saved but enroll not run
+  let pendingEnrollment = false;
+
+  // --- Live silence meter ---
+  let meterStream = null, meterCtx = null, meterAnalyser = null, meterData = null;
+  let meterRaf = null, meterMax = 0, measuring = false, measureTimer = null;
 
   function flash(msg, type) {
     flashBox.innerHTML = '<div class="flash ' + type + '">' + msg + "</div>";
     setTimeout(function () { flashBox.innerHTML = ""; }, 9000);
   }
+
+  function rmsFromAnalyser() {
+    if (!meterAnalyser || !meterData) return 0;
+    meterAnalyser.getByteTimeDomainData(meterData);
+    // Convert 0-255 centered at 128 to approximate RMS-like level 0-400+
+    var sum = 0;
+    for (var i = 0; i < meterData.length; i++) {
+      var v = (meterData[i] - 128) / 128;
+      sum += v * v;
+    }
+    var rms = Math.sqrt(sum / meterData.length);
+    // Scale to roughly match our server-side peak RMS range (50-400)
+    return Math.min(500, Math.round(rms * 450));
+  }
+
+  function updateMeterUI(level) {
+    var bar = $("meter-bar");
+    var pct = Math.min(100, (level / 400) * 100);
+    bar.style.width = pct + "%";
+    $("meter-current").textContent = level;
+    if (level > meterMax) {
+      meterMax = level;
+      $("meter-max").textContent = meterMax;
+    }
+  }
+
+  function meterLoop() {
+    var level = rmsFromAnalyser();
+    updateMeterUI(level);
+    meterRaf = requestAnimationFrame(meterLoop);
+  }
+
+  async function startMeter() {
+    try {
+      meterStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      meterCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var source = meterCtx.createMediaStreamSource(meterStream);
+      meterAnalyser = meterCtx.createAnalyser();
+      meterAnalyser.fftSize = 2048;
+      source.connect(meterAnalyser);
+      meterData = new Uint8Array(meterAnalyser.fftSize);
+      meterMax = 0;
+      $("meter-max").textContent = "0";
+      $("meter-status").textContent = "Слухаю…";
+      $("btn-meter-toggle").textContent = "⏹ Вимкнути індикатор";
+      meterLoop();
+    } catch (err) {
+      flash("Мікрофон: " + err, "error");
+      $("meter-status").textContent = "Помилка мікрофона";
+    }
+  }
+
+  function stopMeter() {
+    if (meterRaf) cancelAnimationFrame(meterRaf);
+    meterRaf = null;
+    if (measureTimer) { clearTimeout(measureTimer); measureTimer = null; }
+    measuring = false;
+    if (meterStream) {
+      meterStream.getTracks().forEach(function (t) { t.stop(); });
+      meterStream = null;
+    }
+    if (meterCtx) {
+      try { meterCtx.close(); } catch (e) {}
+      meterCtx = null;
+    }
+    meterAnalyser = null;
+    meterData = null;
+    $("meter-bar").style.width = "0%";
+    $("meter-current").textContent = "—";
+    $("meter-status").textContent = "Мікрофон вимкнено";
+    $("btn-meter-toggle").textContent = "▶ Увімкнути індикатор";
+  }
+
+  $("btn-meter-toggle").addEventListener("click", function () {
+    if (meterStream) stopMeter();
+    else startMeter();
+  });
+
+  $("btn-measure-silence").addEventListener("click", async function () {
+    if (measuring) return;
+    $("measure-result").textContent = "Вимірювання 3 с… будь ласка, мовчіть";
+    if (!meterStream) await startMeter();
+    if (!meterStream) return;
+    measuring = true;
+    meterMax = 0;
+    $("meter-max").textContent = "0";
+    var start = Date.now();
+    measureTimer = setTimeout(function () {
+      measuring = false;
+      measureTimer = null;
+      var rec = "Рекомендований поріг тиші: ≈ " + Math.min(400, Math.max(80, meterMax + 40));
+      $("measure-result").textContent =
+        "Виміряно за 3 с — поточне ≈ " + ($("meter-current").textContent) +
+        ", максимальне = " + meterMax + ". " + rec +
+        ". Поставте це значення в Configuration → Поріг тиші.";
+      flash("Макс під час тиші: " + meterMax + ". Рекомендований поріг ≈ " + Math.min(400, meterMax + 40), "success");
+    }, 3000);
+  });
 
   function currentSpeaker() {
     var fromSelect = (speakerSelect.value || "").trim().toLowerCase();
@@ -52,7 +154,6 @@
     if (cur && list && list.indexOf(cur) >= 0) speakerSelect.value = cur;
   }
 
-  // Warn if leaving with unsaved recording or pending enrollment
   window.addEventListener("beforeunload", function (e) {
     if (recording || recBlob || pendingEnrollment) {
       e.preventDefault();
@@ -60,7 +161,6 @@
     }
   });
 
-  // files
   const fileInput = $("files"), fileList = $("file-list"), dropzone = $("dropzone");
   fileInput.addEventListener("change", function () {
     fileList.innerHTML = "";
@@ -101,7 +201,6 @@
     } catch (e) { flash("" + e, "error"); }
   });
 
-  // record
   $("btn-rec").addEventListener("click", async function () {
     if (recording) { mediaRecorder.stop(); return; }
     if (!currentSpeaker()) { flash("Оберіть або введіть спікера", "error"); return; }
