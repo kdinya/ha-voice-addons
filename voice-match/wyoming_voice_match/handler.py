@@ -138,13 +138,14 @@ class SpeakerVerifyHandler(AsyncEventHandler):
             "[%s] Speaker verified: %s (similarity=%.4f)",
             sid, result.matched_speaker, result.similarity,
         )
+        # Mark responded so AudioStop does not also run _process_audio_sync.
+        # Listening length is controlled by the client (Voice Satellite / Kiosk
+        # VAD) — we only wait for their AudioStop, with no add-on-side timeout.
         self._responded = True
         bps = self._audio_rate * self._audio_width * self._audio_channels
 
-        try:
-            await asyncio.wait_for(self._audio_stopped.wait(), timeout=30.0)
-        except asyncio.TimeoutError:
-            _LOGGER.debug("[%s] AudioStop timeout (30s)", sid)
+        _LOGGER.debug("[%s] Speaker matched — waiting for client AudioStop (no add-on timeout)", sid)
+        await self._audio_stopped.wait()
 
         full_buffer = bytes(self._audio_buffer)
         buffer_duration = len(full_buffer) / bps if bps else 0
