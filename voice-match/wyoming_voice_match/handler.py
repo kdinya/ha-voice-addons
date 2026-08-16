@@ -138,12 +138,14 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         return len(self._audio_buffer) / bps
 
     async def _maybe_early_endpoint(self) -> None:
-        """If the stream is pure silence long enough, send empty Transcript now.
+        """If the stream is still silence/cough long enough, send empty Transcript now.
 
-        Voice Satellite waits for Transcript before closing the pipeline / TTS.
-        Without this, silence is held until client AudioStop (often 15–30+ s).
-        Only fires when no speech was detected yet — real utterances still wait
-        for client VAD + AudioStop.
+        Home Assistant / Voice Satellite VAD often holds STT for ~15s (stt-vad-end
+        timestamp=15000). Early empty Transcript ends the pipeline without waiting
+        for AI/TTS. Real speech still waits for client AudioStop.
+
+        Important: do NOT treat a single peak spike (click, cough) as speech —
+        that was blocking early-endpoint in 2.0.13.
         """
         if self._responded or not self.early_endpoint_enabled:
             return
@@ -158,7 +160,6 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         self._last_early_check_bytes = len(self._audio_buffer)
 
         duration = self._buffer_duration()
-        # Need at least silence_timeout seconds of audio before ending early
         need = self.silence_timeout if self.silence_timeout_enabled else 2.0
         need = max(need, 1.5)
         if duration < need:
@@ -169,25 +170,35 @@ class SpeakerVerifyHandler(AsyncEventHandler):
         peak = stats["peak"]
         mean = stats.get("mean", peak)
         quiet_ratio = stats.get("quiet_ratio", 0.0)
+        p90 = stats.get("p90", peak)
 
-        # Mark speech if energy clearly above ambient
-        if peak >= thr * 3 or mean >= thr * 1.5 or quiet_ratio < 0.7:
+        # Sustained speech only (mean high OR majority of frames not quiet).
+        # Peak alone is ignored — cough/click must not disable early-endpoint.
+        if mean >= thr * 3.0 or quiet_ratio < 0.55:
+            if not self._heard_speech:
+                _LOGGER.debug(
+                    "[%s] Early-endpoint: speech locked (mean=%.0f quiet=%.0f%%) — wait AudioStop",
+                    self._session_id, mean, quiet_ratio * 100,
+                )
             self._heard_speech = True
             return
 
         if self._heard_speech:
             return
 
-        # Entire stream still looks like silence / near-silence
-        if mean < thr or (peak < thr * 1.5 and quiet_ratio >= 0.9):
-            sid = self._session_id
-            self._responded = True
-            _LOGGER.info(
-                "[%s] Early-endpoint silence (%.1fs peak=%.0f mean=%.0f quiet=%.0f%% thr=%.0f) "
-                "— empty transcript (client still streaming)",
-                sid, duration, peak, mean, quiet_ratio * 100, thr,
-            )
-            await self.write_event(Transcript(text="").event())
+        # Same criteria as post-AudioStop fast-reject
+        reject, reason = self._should_fast_reject(stats)
+        if not reject:
+            return
+
+        sid = self._session_id
+        self._responded = True
+        _LOGGER.info(
+            "[%s] Early-endpoint: %s (%.1fs peak=%.0f mean=%.0f p90=%.0f quiet=%.0f%% thr=%.0f) "
+            "— empty transcript (client still streaming)",
+            sid, reason, duration, peak, mean, p90, quiet_ratio * 100, thr,
+        )
+        await self.write_event(Transcript(text="").event())
 
     def _audio_stats(self, audio_bytes: bytes, sample_rate: int) -> dict:
         """Return duration, peak/mean RMS and quiet-frame ratio for the buffer.
