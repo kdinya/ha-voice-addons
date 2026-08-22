@@ -36,7 +36,6 @@ def main() -> None:
     parser.add_argument("--enrollment-dir", default=os.environ.get("ENROLLMENT_DIR", "/data/enrollment"))
     parser.add_argument("--voiceprints-dir", default=os.environ.get("VOICEPRINTS_DIR", "/data/voiceprints"))
     parser.add_argument("--model-dir", default=os.environ.get("MODEL_DIR", "/data/models"))
-    parser.add_argument("--device", default=os.environ.get("DEVICE", "cpu"), choices=["cuda", "cpu"])
     args = parser.parse_args()
 
     if args.list:
@@ -71,15 +70,10 @@ def main() -> None:
         _LOGGER.error("No audio files found in %s", speaker_dir)
         sys.exit(1)
 
-    _LOGGER.info("Loading ECAPA-TDNN model...")
-    device = args.device
-    if device == "cuda" and not torch.cuda.is_available():
-        device = "cpu"
-    run_opts = {"device": device} if device == "cuda" else {}
+    _LOGGER.info("Loading ECAPA-TDNN model (CPU)...")
     classifier = EncoderClassifier.from_hparams(
         source="speechbrain/spkrec-ecapa-voxceleb",
         savedir=f"{args.model_dir}/spkrec-ecapa-voxceleb",
-        run_opts=run_opts,
     )
 
     embeddings = []
@@ -94,8 +88,6 @@ def main() -> None:
                     torch.tensor(signal).unsqueeze(0), sr, 16000
                 ).squeeze(0).numpy()
             tensor = torch.tensor(signal).unsqueeze(0)
-            if device == "cuda":
-                tensor = tensor.to("cuda")
             with torch.no_grad():
                 emb = classifier.encode_batch(tensor)
             embeddings.append(emb.squeeze().cpu().numpy())

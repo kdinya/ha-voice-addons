@@ -71,7 +71,6 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--voiceprints-dir", default=os.environ.get("VOICEPRINTS_DIR", "/data/voiceprints"))
     parser.add_argument("--threshold", type=float, default=float(os.environ.get("VERIFY_THRESHOLD", "0.35")))
     parser.add_argument("--extraction-threshold", type=float, default=float(os.environ.get("EXTRACTION_THRESHOLD", "0.30")))
-    parser.add_argument("--device", default=os.environ.get("DEVICE", "cpu"), choices=["cuda", "cpu"])
     parser.add_argument("--model-dir", default=os.environ.get("MODEL_DIR", "/data/models"))
     parser.add_argument("--debug", action="store_true", default=os.environ.get("LOG_LEVEL", "INFO").upper() == "DEBUG")
     parser.add_argument("--max-verify-seconds", type=float, default=float(os.environ.get("MAX_VERIFY_SECONDS", "5.0")))
@@ -101,7 +100,6 @@ async def main() -> None:
     verifier = SpeakerVerifier(
         voiceprints_dir=str(voiceprints_dir),
         model_dir=args.model_dir,
-        device=args.device,
         threshold=args.threshold,
         extraction_threshold=args.extraction_threshold,
         max_verify_seconds=args.max_verify_seconds,
@@ -120,8 +118,8 @@ async def main() -> None:
             _LOGGER.warning("No voiceprints — bypass mode")
 
     _LOGGER.info(
-        "Speaker verifier ready — %d speaker(s) (threshold=%.2f, extraction=%.2f, device=%s)",
-        len(verifier.voiceprints), args.threshold, args.extraction_threshold, args.device,
+        "Speaker verifier ready — %d speaker(s) (threshold=%.2f, extraction=%.2f, device=cpu)",
+        len(verifier.voiceprints), args.threshold, args.extraction_threshold,
     )
 
     upstream_languages = await query_upstream_languages(args.upstream_uri)

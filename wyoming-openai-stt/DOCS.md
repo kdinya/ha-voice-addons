@@ -1,47 +1,51 @@
 # Wyoming OpenAI STT
 
-Speech-to-Text через **OpenAI-compatible API** (Groq, OpenAI, LocalAI, тощо).
+Speech-to-Text via any **OpenAI-compatible API** (Groq, OpenAI, LocalAI,
+etc.), exposed to Home Assistant as a **Wyoming Protocol** STT service.
 
-Порт **10300**. Добре працює разом з **Voice Match** (як upstream).
-
----
-
-## Мови: українська та російська
-
-За замовчуванням:
-- мови: **uk ru**
-- режим: **auto** — модель сама визначає, українська це чи російська
-- якщо невпевнено — пріоритет **українській** (перша в списку)
-
-Англійська та інші мови за замовчуванням не використовуються.
-
-| Режим (`language_mode`) | Поведінка |
-|-------------------------|-----------|
-| **auto** | Автовизначення між uk і ru (рекомендовано) |
-| **fixed** | Завжди перша мова зі списку (uk) |
-
-Pipeline у Home Assistant може лишатися з мовою «українська» — для `auto` це не критично: аддон орієнтується на uk/ru.
+Port **10300**. Pairs well with **Voice Match** as its upstream.
 
 ---
 
-## Параметри Configuration
+## Languages: Ukrainian and Russian by default
 
-| Параметр (англ.) | Українською | Опис | Приклад |
-|------------------|-------------|------|---------|
-| **base_url** | Базовий URL API | Адреса OpenAI-compatible endpoint | `https://api.groq.com/openai/v1` |
-| **api_key** | API-ключ | Ключ провайдера (для Groq — з console.groq.com, починається з `gsk_`) | `gsk_...` |
-| **model** | Модель | Назва моделі у провайдера | `whisper-large-v3-turbo` |
-| **languages** | Мови | Мови через пробіл; перша — пріоритет при невпевненості | `uk ru` |
-| **language_mode** | Режим мови | `auto` або `fixed` | `auto` |
-| **log_level** | Рівень логування | `DEBUG` / `INFO` / `WARNING` / `ERROR` | `INFO` |
+Out of the box:
+- languages: **`uk ru`**
+- mode: **`auto`** — the model auto-detects between Ukrainian and Russian
+- if it's unsure, **Ukrainian** is preferred (it's first in the list)
 
-Підписи полів у Configuration показуються **над** полем вводу (українською / російською / англійською залежно від мови інтерфейсу HA).
+English and other languages are not used by default; set `languages` to
+change this.
 
-### Рекомендовані моделі
+| `language_mode` | Behavior |
+|---|---|
+| **`auto`** | Auto-detect between the configured languages (recommended) |
+| **`fixed`** | Always use the first language in the list |
+
+Your Assist pipeline language can stay set to Ukrainian even in `auto`
+mode — the add-on decides between `uk`/`ru` on its own.
+
+---
+
+## Configuration options
+
+| Option | Description | Example |
+|---|---|---|
+| **`base_url`** | OpenAI-compatible API endpoint | `https://api.groq.com/openai/v1` |
+| **`api_key`** | Provider API key (for Groq, from console.groq.com, starts with `gsk_`) | `gsk_...` |
+| **`model`** | Model name at the provider | `whisper-large-v3-turbo` |
+| **`languages`** | Space-separated languages; the first is preferred when ambiguous | `uk ru` |
+| **`language_mode`** | `auto` or `fixed` | `auto` |
+| **`log_level`** | `DEBUG` / `INFO` / `WARNING` / `ERROR` | `INFO` |
+
+Field labels in Configuration are shown above each input, translated
+according to your Home Assistant UI language.
+
+### Recommended models
 
 **Groq**
-- `whisper-large-v3-turbo` — швидко і достатньо точно
-- `whisper-large-v3` — точніше, дорожче за токенами
+- `whisper-large-v3-turbo` — fast, accurate enough for voice assistants
+- `whisper-large-v3` — more accurate, more tokens/cost
 
 **OpenAI**
 - `whisper-1`
@@ -50,20 +54,22 @@ Pipeline у Home Assistant може лишатися з мовою «украї�
 
 ---
 
-## Якщо текст з помилками
+## If transcripts are inaccurate
 
-1. Режим **auto**, мови `uk ru`
-2. Спробуйте модель `whisper-large-v3`
-3. У Assist pipeline бажано українська
-4. Менше шуму, чіткіша вимова
-5. У Voice Match параметр `extraction_threshold` (`Поріг виділення сегментів`) ≈ 0.30, якщо обрізає слова
+1. Keep `language_mode: auto` with `languages: uk ru`.
+2. Try the `whisper-large-v3` model.
+3. Prefer Ukrainian as the Assist pipeline language.
+4. Reduce background noise; speak clearly.
+5. If Voice Match is in front of this add-on, try lowering its
+   `extraction_threshold` (≈ 0.30) if it's cutting off words.
 
 ---
 
-## Підключення
+## Connecting it
 
-1. Start аддона  
-2. **Wyoming Protocol** → порт **10300**  
-   або у Voice Match: `upstream_uri = tcp://homeassistant:10300`
+1. Start the add-on.
+2. Add a **Wyoming Protocol** integration on port **10300**, or set
+   `upstream_uri = tcp://homeassistant:10300` in Voice Match.
 
-Без заповненого **api_key** розпізнавання не працюватиме — перевірте логи аддона.
+Transcription will not work without a valid **`api_key`** — check the
+add-on logs if nothing comes through.

@@ -48,25 +48,7 @@ def main() -> None:
     )
     env["SAVE_REJECTED"] = "true" if options.get("save_rejected", False) else "false"
     env["LOG_LEVEL"] = str(options.get("log_level", "INFO"))
-    env["DEVICE"] = "cpu"
     env["PYTHONPATH"] = "/app"
-
-    # Silence / fast-path controls (2.0.9)
-    env["SILENCE_THRESHOLD_ENABLED"] = (
-        "true" if options.get("silence_threshold_enabled", True) else "false"
-    )
-    env["SILENCE_THRESHOLD"] = str(options.get("silence_threshold", 180))
-    env["SILENCE_TIMEOUT_ENABLED"] = (
-        "true" if options.get("silence_timeout_enabled", True) else "false"
-    )
-    env["SILENCE_TIMEOUT"] = str(options.get("silence_timeout", 2.0))
-    env["MIN_SPEECH_DURATION_ENABLED"] = (
-        "true" if options.get("min_speech_duration_enabled", True) else "false"
-    )
-    env["MIN_SPEECH_DURATION"] = str(options.get("min_speech_duration", 1.0))
-    env["EARLY_ENDPOINT_ENABLED"] = (
-        "true" if options.get("early_endpoint_enabled", True) else "false"
-    )
 
     for d in ("/data/voiceprints", "/data/enrollment", "/data/models", "/data/hf_cache", "/data/rejections"):
         os.makedirs(d, exist_ok=True)
@@ -76,15 +58,6 @@ def main() -> None:
         f"(upstream={env['UPSTREAM_URI']}, languages={env['STT_LANGUAGES']})",
         file=sys.stderr,
     )
-    print(
-        f"[entrypoint] Silence controls: threshold={env['SILENCE_THRESHOLD']} "
-        f"(on={env['SILENCE_THRESHOLD_ENABLED']}), "
-        f"timeout={env['SILENCE_TIMEOUT']}s (on={env['SILENCE_TIMEOUT_ENABLED']}), "
-        f"min_speech={env['MIN_SPEECH_DURATION']}s (on={env['MIN_SPEECH_DURATION_ENABLED']}), "
-        f"early_endpoint={env['EARLY_ENDPOINT_ENABLED']}",
-        file=sys.stderr,
-    )
-
     webui = subprocess.Popen(
         [sys.executable, "/webui.py"],
         env=env,

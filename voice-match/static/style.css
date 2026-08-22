@@ -279,8 +279,6 @@ footer {
 .rec-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
 .rec-audio { width: 100%; margin-top: 0.5rem; }
 
-.quality-list { list-style: none; margin: 0.5rem 0; }
-.quality-list li { padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
 .q-ok { color: var(--success); }
 .q-weak { color: var(--warn); }
 .q-bad { color: var(--danger); }
@@ -308,8 +306,13 @@ footer {
   font-size: 0.9rem;
   color: var(--muted);
   border-bottom: 1px solid rgba(58, 58, 60, 0.6);
+  border-left: 3px solid transparent;
+  padding-left: 0.5rem;
 }
 .file-clean-list li:last-child { border-bottom: none; }
+.file-clean-list li.q-ok { border-left-color: var(--success); }
+.file-clean-list li.q-weak { border-left-color: var(--warn); }
+.file-clean-list li.q-bad { border-left-color: var(--danger); }
 .file-clean-list .file-name {
   flex: 1;
   min-width: 0;
@@ -317,37 +320,9 @@ footer {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* Live silence meter */
-.meter-wrap {
-  background: var(--input-bg);
-  border-radius: 8px;
-  padding: 0.5rem;
-  margin-bottom: 0.75rem;
-  border: 1px solid var(--border);
-}
-.meter-bar {
-  height: 28px;
-  width: 0%;
-  max-width: 100%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, var(--success) 0%, var(--warn) 55%, var(--danger) 100%);
-  transition: width 0.08s linear;
-}
-.meter-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.7rem;
-  color: var(--muted);
-  margin-top: 0.35rem;
-  padding: 0 0.15rem;
-}
-.meter-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  font-size: 0.9rem;
-  margin-bottom: 0.25rem;
+.file-clean-list .quality-note {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
 }
 
 @media (max-width: 480px) {

@@ -8,131 +8,16 @@
   let mediaRecorder = null, recChunks = [], recBlob = null, recording = false;
   let pendingEnrollment = false;
 
-  // --- Live silence meter ---
-  let meterStream = null, meterCtx = null, meterAnalyser = null, meterData = null;
-  let meterRaf = null, meterMax = 0, measuring = false, measureTimer = null;
+  // Full enrollment listing from the last /api/status call (all speakers).
+  let allEnrollment = [];
+  // Quality results from the last "check all samples" run, keyed by filename.
+  // Reset whenever the selected speaker changes.
+  let sampleQuality = {};
 
   function flash(msg, type) {
     flashBox.innerHTML = '<div class="flash ' + type + '">' + msg + "</div>";
     setTimeout(function () { flashBox.innerHTML = ""; }, 9000);
   }
-
-  function rmsFromAnalyser() {
-    if (!meterAnalyser || !meterData) return 0;
-    meterAnalyser.getByteTimeDomainData(meterData);
-    // Convert 0-255 centered at 128 to approximate RMS-like level 0-400+
-    var sum = 0;
-    for (var i = 0; i < meterData.length; i++) {
-      var v = (meterData[i] - 128) / 128;
-      sum += v * v;
-    }
-    var rms = Math.sqrt(sum / meterData.length);
-    // Scale to roughly match our server-side peak RMS range (50-400)
-    return Math.min(500, Math.round(rms * 450));
-  }
-
-  function updateMeterUI(level) {
-    var bar = $("meter-bar");
-    var pct = Math.min(100, (level / 400) * 100);
-    bar.style.width = pct + "%";
-    $("meter-current").textContent = level;
-    if (level > meterMax) {
-      meterMax = level;
-      $("meter-max").textContent = meterMax;
-    }
-  }
-
-  function meterLoop() {
-    var level = rmsFromAnalyser();
-    updateMeterUI(level);
-    meterRaf = requestAnimationFrame(meterLoop);
-  }
-
-  async function startMeter() {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("getUserMedia не підтримується в цьому контексті");
-      }
-      meterStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-      });
-      meterCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (meterCtx.state === "suspended") {
-        await meterCtx.resume();
-      }
-      var source = meterCtx.createMediaStreamSource(meterStream);
-      meterAnalyser = meterCtx.createAnalyser();
-      meterAnalyser.fftSize = 2048;
-      source.connect(meterAnalyser);
-      meterData = new Uint8Array(meterAnalyser.fftSize);
-      meterMax = 0;
-      $("meter-max").textContent = "0";
-      $("meter-status").textContent = "Слухаю…";
-      $("btn-meter-toggle").textContent = "⏹ Вимкнути індикатор";
-      meterLoop();
-    } catch (err) {
-      var msg = (err && err.message) ? err.message : String(err);
-      var name = (err && err.name) ? err.name : "";
-      var hint = "";
-      if (name === "NotAllowedError" || name === "PermissionDeniedError" || /permission|denied|NotAllowed/i.test(msg)) {
-        hint = " Дозвіл на мікрофон заблоковано. Відкрийте цю сторінку в новій вкладці (кнопка «Відкрити в новій вкладці» біля Ingress) і дозвольте мікрофон.";
-      } else if (window.self !== window.top) {
-        hint = " Сторінка в iframe (HA Ingress). Часто мікрофон блокується. Відкрийте Ingress у новій вкладці браузера.";
-      }
-      flash("Мікрофон: " + msg + hint, "error");
-      $("meter-status").textContent = "Помилка мікрофона — відкрийте в новій вкладці";
-      console.error("startMeter failed", err);
-    }
-  }
-
-  function stopMeter() {
-    if (meterRaf) cancelAnimationFrame(meterRaf);
-    meterRaf = null;
-    if (measureTimer) { clearTimeout(measureTimer); measureTimer = null; }
-    measuring = false;
-    if (meterStream) {
-      meterStream.getTracks().forEach(function (t) { t.stop(); });
-      meterStream = null;
-    }
-    if (meterCtx) {
-      try { meterCtx.close(); } catch (e) {}
-      meterCtx = null;
-    }
-    meterAnalyser = null;
-    meterData = null;
-    $("meter-bar").style.width = "0%";
-    $("meter-current").textContent = "—";
-    $("meter-status").textContent = "Мікрофон вимкнено";
-    $("btn-meter-toggle").textContent = "▶ Увімкнути індикатор";
-  }
-
-  $("btn-meter-toggle").addEventListener("click", function () {
-    if (meterStream) stopMeter();
-    else startMeter();
-  });
-
-  $("btn-measure-silence").addEventListener("click", async function () {
-    if (measuring) return;
-    $("measure-result").textContent = "Вимірювання 3 с… будь ласка, мовчіть";
-    if (!meterStream) await startMeter();
-    if (!meterStream) return;
-    measuring = true;
-    meterMax = 0;
-    $("meter-max").textContent = "0";
-    var start = Date.now();
-    measureTimer = setTimeout(function () {
-      measuring = false;
-      measureTimer = null;
-      // Єдина формула: макс фону + запас 40, не нижче 50 (мін. schema), не вище 400
-      var recommended = Math.min(400, Math.max(50, meterMax + 40));
-      $("measure-result").textContent =
-        "Виміряно за 3 с — поточне ≈ " + ($("meter-current").textContent) +
-        ", максимальне = " + meterMax +
-        ". Рекомендований поріг тиші: ≈ " + recommended +
-        " (макс + 40, мін. 50). Поставте в Configuration → Поріг тиші.";
-      flash("Макс під час тиші: " + meterMax + ". Рекомендований поріг ≈ " + recommended, "success");
-    }, 3000);
-  });
 
   function currentSpeaker() {
     var fromSelect = (speakerSelect.value || "").trim().toLowerCase();
@@ -150,15 +35,25 @@
     }
   }
 
+  function onSpeakerChanged() {
+    // A different speaker is selected — old quality markers no longer apply.
+    sampleQuality = {};
+    $("quality-box").classList.add("hidden");
+    $("quality-box").innerHTML = "";
+    renderCurrentSpeakerSamples();
+  }
+
   speakerSelect.addEventListener("change", function () {
     if (speakerSelect.value) {
       speakerInput.value = speakerSelect.value;
       enrollSpeaker.value = speakerSelect.value;
     }
+    onSpeakerChanged();
   });
   speakerInput.addEventListener("input", function () {
     enrollSpeaker.value = speakerInput.value.trim().toLowerCase();
     speakerSelect.value = "";
+    onSpeakerChanged();
   });
 
   function fillSpeakerSelect(list) {
@@ -302,32 +197,37 @@
     } catch (e) { flash("" + e, "error"); }
   });
 
+  // --- Section 5: samples of the currently selected speaker ---
+  //
+  // "Перевірити всі зразки" checks the samples of the selected speaker and
+  // color-codes each existing row in the list below (green/yellow/red).
+  // It does NOT render a second, separate list — quality-box only shows a
+  // short summary line + recommendation.
   $("btn-check-all").addEventListener("click", async function () {
-    var sp = currentSpeaker() || enrollSpeaker.value.trim().toLowerCase();
+    var sp = currentSpeaker();
     if (!sp) { flash("Вкажіть спікера", "error"); return; }
-    $("quality-box").classList.remove("hidden");
-    $("quality-box").innerHTML = "<p class=\"empty\">Перевірка…</p>";
+    var box = $("quality-box");
+    box.classList.remove("hidden");
+    box.textContent = "Перевірка…";
     var form = new FormData();
     form.append("speaker", sp);
     try {
       var res = await fetch("./api/check_quality", { method: "POST", body: form });
       var data = await res.json();
       if (!data.scores || !data.scores.length) {
-        $("quality-box").innerHTML = "<p class=\"empty\">" + (data.message || "Немає") + "</p>";
+        box.textContent = data.message || "Немає зразків для перевірки.";
+        sampleQuality = {};
+        renderCurrentSpeakerSamples();
         return;
       }
-      var html = "<p class=\"hint\">" + (data.message || "") + "</p><ul class=\"quality-list\">";
+      sampleQuality = {};
       data.scores.forEach(function (s) {
-        var b = s.quality === "ok" ? "ok" : (s.quality === "weak" ? "weak" : "bad");
-        html += "<li class=\"q-" + b + "\"><strong>" + s.file + "</strong> — " + (s.note || s.quality);
-        if (s.duration_s != null) html += " [" + s.duration_s + "с]";
-        html += "</li>";
+        sampleQuality[s.file] = s;
       });
-      html += "</ul>";
-      if (data.recommendation) html += "<p class=\"hint\">" + data.recommendation + "</p>";
-      $("quality-box").innerHTML = html;
+      box.textContent = (data.message || "") + (data.recommendation ? " — " + data.recommendation : "");
+      renderCurrentSpeakerSamples();
     } catch (e) {
-      $("quality-box").innerHTML = "<p class=\"empty\">" + e + "</p>";
+      box.textContent = "" + e;
     }
   });
 
@@ -393,10 +293,11 @@
       var res = await fetch("./api/status");
       var data = await res.json();
       fillSpeakerSelect(data.speakers || []);
-      renderEnrollment(data.enrollment || []);
+      allEnrollment = data.enrollment || [];
+      renderCurrentSpeakerSamples();
       renderVoiceprints(data.voiceprints || []);
       if (data.upstream_uri) $("current-upstream").textContent = data.upstream_uri;
-      var speakersWithSamples = (data.enrollment || []).map(function (s) { return s.name; });
+      var speakersWithSamples = allEnrollment.map(function (s) { return s.name; });
       var vps = data.voiceprints || [];
       if (speakersWithSamples.some(function (n) { return vps.indexOf(n) < 0; })) {
         pendingEnrollment = true;
@@ -404,40 +305,73 @@
     } catch (e) { console.error(e); }
   }
 
-  function renderEnrollment(list) {
+  function qualityClass(q) {
+    if (!q) return "";
+    return " q-" + (q.quality === "ok" ? "ok" : (q.quality === "weak" ? "weak" : "bad"));
+  }
+
+  function qualityIcon(q) {
+    if (!q) return "";
+    return q.quality === "ok" ? "✅" : (q.quality === "weak" ? "⚠" : "❌");
+  }
+
+  // Renders ONLY the samples of the currently selected speaker. Empty
+  // (no list, "check all" disabled) when no speaker is selected — this is
+  // the single source of truth for section 5, "check all samples" colors
+  // these same rows instead of appending a second list.
+  function renderCurrentSpeakerSamples() {
     var el = $("enrollment-list");
-    if (!list.length) { el.innerHTML = '<p class="empty">Немає зразків. Запишіть або завантажте аудіо.</p>'; return; }
-    var html = "";
-    list.forEach(function (s) {
-      html += '<div class="speaker-block">';
-      html += '<div class="speaker-head"><strong>' + s.name + '</strong> <span class="hint" style="margin:0">(' + s.count + ')</span>';
-      html += ' <button type="button" class="btn small danger" data-del-samples="' + s.name + '">🗑 Видалити всі</button></div>';
-      html += '<ul class="file-clean-list">';
-      (s.files || []).forEach(function (f) {
-        var name = typeof f === "string" ? f : f.name;
-        var kb = typeof f === "object" && f.size_kb != null ? " (" + f.size_kb + " KB)" : "";
-        html += '<li><span class="file-name">' + name + kb + '</span>' +
-          '<button type="button" class="btn small danger" data-del-file="' + name +
-          '" data-speaker="' + s.name + '">🗑 Видалити</button></li>';
-      });
-      html += "</ul></div>";
+    var btn = $("btn-check-all");
+    var sp = currentSpeaker();
+
+    if (!sp) {
+      el.innerHTML = '<p class="empty">Оберіть спікера, щоб побачити його зразки.</p>';
+      btn.disabled = true;
+      return;
+    }
+
+    var entry = allEnrollment.filter(function (s) { return s.name === sp; })[0];
+    btn.disabled = false;
+
+    if (!entry || !entry.files || !entry.files.length) {
+      el.innerHTML = '<p class="empty">Немає зразків для «' + sp + '». Запишіть або завантажте аудіо.</p>';
+      return;
+    }
+
+    var html = '<div class="speaker-block">';
+    html += '<div class="speaker-head"><strong>' + entry.name + '</strong> <span class="hint" style="margin:0">(' + entry.count + ')</span>';
+    html += ' <button type="button" class="btn small danger" data-del-samples="' + entry.name + '">🗑 Видалити всі</button></div>';
+    html += '<ul class="file-clean-list">';
+    entry.files.forEach(function (f) {
+      var name = typeof f === "string" ? f : f.name;
+      var kb = typeof f === "object" && f.size_kb != null ? " (" + f.size_kb + " KB)" : "";
+      var q = sampleQuality[name];
+      html += '<li class="file-item' + qualityClass(q) + '">' +
+        '<span class="file-name">' + qualityIcon(q) + (q ? " " : "") + name + kb + '</span>' +
+        (q ? '<span class="hint quality-note">' + (q.note || q.quality) + '</span>' : '') +
+        '<button type="button" class="btn small danger" data-del-file="' + name +
+        '" data-speaker="' + entry.name + '">🗑 Видалити</button></li>';
     });
+    html += "</ul></div>";
     el.innerHTML = html;
-    el.querySelectorAll("[data-del-samples]").forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        if (!confirm("Видалити всі зразки «" + btn.dataset.delSamples + "»?")) return;
-        var form = new FormData(); form.append("speaker", btn.dataset.delSamples);
+
+    el.querySelectorAll("[data-del-samples]").forEach(function (btn2) {
+      btn2.addEventListener("click", async function () {
+        if (!confirm("Видалити всі зразки «" + btn2.dataset.delSamples + "»?")) return;
+        var form = new FormData(); form.append("speaker", btn2.dataset.delSamples);
         await fetch("./delete_samples", { method: "POST", body: form });
+        sampleQuality = {};
         await refreshStatus();
       });
     });
-    el.querySelectorAll("[data-del-file]").forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        if (!confirm("Видалити файл «" + btn.dataset.delFile + "»?")) return;
+    el.querySelectorAll("[data-del-file]").forEach(function (btn2) {
+      btn2.addEventListener("click", async function () {
+        if (!confirm("Видалити файл «" + btn2.dataset.delFile + "»?")) return;
         var form = new FormData();
-        form.append("speaker", btn.dataset.speaker);
-        form.append("filename", btn.dataset.delFile);
+        form.append("speaker", btn2.dataset.speaker);
+        form.append("filename", btn2.dataset.delFile);
         await fetch("./delete_file", { method: "POST", body: form });
+        delete sampleQuality[btn2.dataset.delFile];
         await refreshStatus();
       });
     });

@@ -10,33 +10,10 @@
   <div class="container">
     <header>
       <h1>🎤 Voice Match</h1>
-      <p class="subtitle">Запис WAV · перевірка якості · enrollment · voiceprint · калібрування тиші</p>
+      <p class="subtitle">Запис WAV · перевірка якості · enrollment · voiceprint</p>
     </header>
 
     <div id="flash-box"></div>
-
-    <section class="card">
-      <h2>0. Калібрування тиші</h2>
-      <p class="hint">Живий рівень звуку з <strong>браузерного</strong> мікрофона (орієнтовна шкала). Реальний поріг на сервері — інша шкала (int16 RMS, типово 50–2000+). Після сесії без мови дивіться в логах аддона рядок <code>AudioStop — peak=… mean=…</code> і ставте Поріг тиші трохи вище за <em>mean</em> фону.</p>
-      <div class="meter-wrap">
-        <div class="meter-bar" id="meter-bar"></div>
-        <div class="meter-labels">
-          <span>0</span><span>100</span><span>200</span><span>300</span><span>400+</span>
-        </div>
-      </div>
-      <div class="meter-stats">
-        <span>Зараз: <strong id="meter-current">—</strong></span>
-        <span>Макс: <strong id="meter-max">—</strong></span>
-        <span id="meter-status" class="hint">Мікрофон вимкнено</span>
-      </div>
-      <div class="rec-row" style="margin-top:0.75rem">
-        <button type="button" class="btn secondary" id="btn-meter-toggle">▶ Увімкнути індикатор</button>
-        <button type="button" class="btn primary" id="btn-measure-silence">📏 Виміряти тишу (3 с)</button>
-      </div>
-      <p id="measure-result" class="hint"></p>
-      <p class="hint" style="margin-top:0.5rem">Рекомендація: поставте <em>Поріг тиші</em> трохи вище за «Макс» під час вимірювання фону (наприклад макс 120 → поріг 150–180).</p>
-      <p class="hint" style="margin-top:0.35rem">⚠ Якщо мікрофон не вмикається — відкрийте цю сторінку <strong>у новій вкладці</strong> браузера (HA Ingress часто блокує getUserMedia в iframe).</p>
-    </section>
 
     <section class="card">
       <h2>1. Пошук Wyoming STT</h2>
@@ -92,10 +69,10 @@
 
     <section class="card">
       <h2>5. Зразки</h2>
-      <p class="hint">Після збереження записів перевірте якість. Залиште 3–5 зразків зі статусом OK.</p>
-      <button type="button" class="btn secondary" id="btn-check-all">Перевірити всі зразки</button>
-      <div id="quality-box" class="hidden"></div>
-      <div id="enrollment-list"><p class="empty">…</p></div>
+      <p class="hint">Тут показані зразки обраного вище спікера. Оберіть спікера, запишіть/завантажте зразки, після чого натисніть «Перевірити всі зразки» — записи в списку нижче будуть позначені кольором (OK / слабо / погано), без дублювання списку. Залиште 3–5 зразків зі статусом OK.</p>
+      <button type="button" class="btn secondary" id="btn-check-all" disabled>Перевірити всі зразки</button>
+      <div id="quality-box" class="hidden hint"></div>
+      <div id="enrollment-list"><p class="empty">Оберіть спікера, щоб побачити його зразки.</p></div>
     </section>
 
     <section class="card">
@@ -115,7 +92,7 @@
     </section>
 
     <footer>
-      <p>Wyoming Protocol → порт <strong>10350</strong>. Налаштування тиші (поріг / таймаут / мін. довжина) — у Configuration аддона. Без перевірки голосу: вимкніть «Вимагати збіг голосу».</p>
+      <p>Wyoming Protocol → порт <strong>10350</strong>. Без перевірки голосу: вимкніть «Вимагати збіг голосу».</p>
     </footer>
   </div>
   <script src="static/app.js"></script>

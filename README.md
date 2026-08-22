@@ -1,94 +1,116 @@
 # HA Voice Add-ons
 
-Репозиторій аддонів для Home Assistant: верифікація голосу та Speech-to-Text через OpenAI-compatible API (Groq, OpenAI тощо).
+A small Home Assistant add-on repository for **speaker verification** and
+**Speech-to-Text** over an OpenAI-compatible API (Groq, OpenAI, LocalAI, …).
 
-**Репозиторій:** https://github.com/kdinya/ha-voice-addons
+**Repository:** https://github.com/kdinya/ha-voice-addons
 
-| Аддон | Порт Wyoming | Призначення |
-|-------|--------------|-------------|
-| **Voice Match** | **10350** | Перевірка голосу, проксі на upstream STT (повністю автономний) |
-| **Wyoming OpenAI STT** | **10300** | Розпізнавання мови (uk/ru) через Groq / OpenAI API |
+| Add-on | Wyoming port | Purpose |
+|---|---|---|
+| **[Voice Match](voice-match/)** | `10350` | Verifies that it's really *you* talking, strips background noise / other speakers, then proxies the cleaned audio to an upstream Wyoming STT add-on. Fully self-contained. |
+| **[Wyoming OpenAI STT](wyoming-openai-stt/)** | `10300` | Speech-to-Text (Ukrainian / Russian by default) via any OpenAI-compatible transcription API. |
 
-## Встановлення в Home Assistant
+## Installation
 
-Перевірено з **Home Assistant OS**, Core **2026.8.x**, Supervisor **2026.07.x**.
+Tested with **Home Assistant OS**, Core `2026.8.x`, Supervisor `2026.07.x`, on
+`amd64` and `aarch64`.
 
 1. **Settings → Add-ons → Add-on store → ⋮ → Repositories**
-2. Додайте:
+2. Add:
    ```
    https://github.com/kdinya/ha-voice-addons
    ```
-3. Оновіть список, встановіть потрібні аддони, запустіть їх.
-4. Додайте інтеграцію **Wyoming Protocol** на відповідні порти.
+3. Refresh the store, install the add-on(s) you need, and start them.
+4. Add a **Wyoming Protocol** integration pointed at the relevant port.
 
-### Типова схема
+### Typical pipeline
 
 ```
-Мікрофон HA
-    → Voice Match (10350)          ← перевірка спікера
-        → Wyoming OpenAI STT (10300)  ← транскрипція (Groq/OpenAI)
-            → Assist / автоматизації
+Home Assistant microphone
+    → Voice Match (10350)            ← speaker verification
+        → Wyoming OpenAI STT (10300) ← transcription (Groq / OpenAI / …)
+            → Assist / automations
 ```
+
+You can also use either add-on on its own — Voice Match works with any
+Wyoming STT service as its upstream, and Wyoming OpenAI STT works as a
+standalone Wyoming STT provider without Voice Match in front of it.
 
 ---
 
-## Voice Match 2.0 — коротко
+## Voice Match — quick overview
 
-**Нове в 2.0.x:**
-- Повністю автономний (не залежить від чужого образу)
-- **Hot-reload** — після Enrollment рестарт більше НЕ потрібен
-- М’якші пороги за замовчуванням (0.35 / 0.30)
-- У 2.0.3+ прибрано кнопки Restart з UI
-- У 2.0.4 виправлено перевірку запису з мікрофона (`/api/analyze_blob`)
-- У **2.0.7** тривалість слухання повністю на Voice Satellite / Kiosk
-- У **2.0.8** виправлено зависання на 30 с після кашлю / короткої тиші:  
-  аддон одразу віддає порожній Transcript без важкої верифікації,  
-  тому Voice Satellite може закрити слухання за своїм VAD (наприклад 6 с)
+- Fully self-contained — no dependency on a third-party base image.
+- **Hot-reload**: after enrolling a new voice, no add-on restart is needed.
+- Runs on CPU only (`amd64` / `aarch64`) — no GPU required.
+- Web UI (Ingress panel) for recording samples, checking their quality,
+  enrollment, and managing voiceprints.
+- First start takes 1–3 minutes while the ECAPA-TDNN model downloads into
+  `/data`; subsequent starts are fast (cached).
 
-> Аддон **не керує** тривалістю слухання. Він лише не блокує клієнта, коли в буфері явно немає мови.
+**Setup:**
+1. In Configuration, set **`upstream_uri`** ("Wyoming STT address"), e.g.
+   `tcp://homeassistant:10300` — or use **Scan** in the web UI.
+2. Open the **Voice Match** side-panel:
+   - pick or create a speaker;
+   - record from the microphone or upload files;
+   - check sample quality;
+   - **Enroll** → the voiceprint is active immediately.
+3. Add a **Wyoming Protocol** integration on port **10350** and select
+   Voice Match as the STT engine in your Assist pipeline.
 
-**Перший старт:** 1–3 хвилини (завантаження моделі ECAPA-TDNN у `/data`). Далі — з кешу.
+| Option | Description | Default |
+|---|---|---|
+| `upstream_uri` | Where verified audio is forwarded | `tcp://homeassistant:10300` |
+| `verify_threshold` | Voice similarity threshold (0–1); higher = stricter | `0.35` |
+| `extraction_threshold` | Strips other voices/background before STT | `0.30` |
+| `stt_languages` | Comma-separated languages advertised to HA | `uk,ru` |
+| `require_speaker_match` | Reject audio from unenrolled speakers | `true` |
+| `log_level` | `DEBUG` / `INFO` / `WARNING` / `ERROR` | `INFO` |
 
-1. У Configuration вкажіть **upstream_uri** (`Адреса Wyoming STT`), напр. `tcp://homeassistant:10300`.
-2. Відкрийте панель **Voice Match**:
-   - спікер (список або нове ім’я латиницею);
-   - запис з мікрофона або завантаження файлів;
-   - перевірка якості зразків;
-   - **Enrollment** → voiceprint активується одразу.
-3. Wyoming Protocol → порт **10350** → у pipeline STT = Voice Match.
+Full reference: [voice-match/DOCS.md](voice-match/DOCS.md).
+Security notes: [SECURITY.md](SECURITY.md).
 
-### Параметри Voice Match
+### Enrolling a voice
 
-| Параметр | Українською | За замовчуванням |
-|----------|-------------|------------------|
-| `upstream_uri` | Адреса Wyoming STT | `tcp://homeassistant:10300` |
-| `verify_threshold` | Поріг верифікації голосу | `0.35` |
-| `extraction_threshold` | Поріг виділення сегментів | `0.30` |
-| `stt_languages` | Мови розпізнавання | `uk,ru` |
-| `require_speaker_match` | Вимагати збіг голосу | `true` |
-| `log_level` | Рівень логування | `INFO` |
-
-Детальніше: [voice-match/DOCS.md](voice-match/DOCS.md).  
-Безпека: [SECURITY.md](SECURITY.md).
-
----
-
-## Enrollment (реєстрація голосу)
-
-1. Обрати спікера або ввести нове ім’я (латиниця).
-2. Записати 3–5 зразків (3–10 сек).
-3. **Перевірити всі зразки** → видалити погані.
-4. **Enrollment** → voiceprint створюється і **одразу активний** (рестарт не потрібен).
+1. Pick an existing speaker or type a new name (lowercase, `a-z0-9_-`).
+2. Record 3–5 samples (3–10 seconds of clean speech each).
+3. **Check all samples** → remove any marked weak/bad.
+4. **Enroll** → the voiceprint is created and **active immediately** (no
+   restart required).
 
 ---
 
-## Релізи
+## Wyoming OpenAI STT — quick overview
 
-Після змін у `main`:
+- Speech-to-Text via any OpenAI-compatible transcription API (Groq, OpenAI,
+  LocalAI, …).
+- Ships tuned defaults for **Ukrainian / Russian** auto-detection, but you
+  can point it at any model/language your provider supports.
 
-```bash
-git tag 2.0.10
-git push origin 2.0.10
-```
+| Option | Description | Example |
+|---|---|---|
+| `base_url` | OpenAI-compatible API endpoint | `https://api.groq.com/openai/v1` |
+| `api_key` | Provider API key | `gsk_...` |
+| `model` | Model name at the provider | `whisper-large-v3-turbo` |
+| `languages` | Space-separated languages; first = preferred on ambiguity | `uk ru` |
+| `language_mode` | `auto` (detect) or `fixed` (force first language) | `auto` |
+| `log_level` | `DEBUG` / `INFO` / `WARNING` / `ERROR` | `INFO` |
 
-GitHub Action створить Release з текстом із CHANGELOG.
+Full reference: [wyoming-openai-stt/DOCS.md](wyoming-openai-stt/DOCS.md).
+
+---
+
+## Releases
+
+Each add-on is versioned independently via its own `config.yaml`. Tagging a
+commit on `main` triggers `.github/workflows/release.yml`, which builds a
+GitHub Release with notes pulled from the matching `CHANGELOG.md` section.
+CI (`.github/workflows/ci.yml`) runs on every push/PR: syntax checks, a
+regression test for the `languages` code-injection fix, add-on smoke tests,
+a check that `CHANGELOG.md` has an entry for the current `config.yaml`
+version, and a Dockerfile lint + build for both add-ons.
+
+## License
+
+See [LICENSE](LICENSE).

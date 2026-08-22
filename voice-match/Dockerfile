@@ -13,14 +13,13 @@ RUN apt-get update && \
         curl \
         && rm -rf /var/lib/apt/lists/*
 
-# PyTorch CPU (amd64) / default torch for aarch64
-ARG TARGETARCH
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        pip install --no-cache-dir torch==2.4.1+cpu torchaudio==2.4.1+cpu \
-            --index-url https://download.pytorch.org/whl/cpu; \
-    else \
-        pip install --no-cache-dir torch==2.4.1 torchaudio==2.4.1; \
-    fi
+# PyTorch CPU-only build for both amd64 and aarch64. PyTorch publishes
+# CPU wheels for aarch64 on the same "cpu" index (no separate "+cpu" local
+# version tag needed there — the index only has one build per aarch64
+# release), so a single pip invocation covers both architectures and keeps
+# the aarch64 image from pulling a much larger, unnecessarily broad wheel.
+RUN pip install --no-cache-dir torch==2.4.1 torchaudio==2.4.1 \
+        --index-url https://download.pytorch.org/whl/cpu
 
 # Python packages (pinned where practical)
 RUN pip install --no-cache-dir \
@@ -46,7 +45,6 @@ RUN mkdir -p /data/enrollment /data/voiceprints /data/models /data/hf_cache /dat
 
 ENV PYTHONPATH=/app
 ENV HF_HOME=/data/hf_cache
-ENV DEVICE=cpu
 
 WORKDIR /app
 EXPOSE 10350 8099

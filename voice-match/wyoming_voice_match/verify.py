@@ -42,7 +42,6 @@ class SpeakerVerifier:
         self,
         voiceprints_dir: str,
         model_dir: str = "/data/models",
-        device: str = "cuda",
         threshold: float = 0.30,
         extraction_threshold: float = 0.25,
         max_verify_seconds: float = 5.0,
@@ -55,18 +54,14 @@ class SpeakerVerifier:
         self.window_seconds = window_seconds
         self.step_seconds = step_seconds
 
-        # Auto-detect device: use CUDA if available and requested, fall back to CPU
-        if device == "cuda" and not torch.cuda.is_available():
-            _LOGGER.warning("CUDA requested but not available, falling back to CPU")
-            device = "cpu"
-        self.device = device
+        # The add-on always runs on CPU (no GPU passthrough in Home Assistant
+        # OS/Supervisor), so there is no device option here — see DOCS.md.
+        self.device = "cpu"
 
         # Load the pretrained ECAPA-TDNN model
-        run_opts = {"device": device} if device == "cuda" else {}
         self.classifier = EncoderClassifier.from_hparams(
             source="speechbrain/spkrec-ecapa-voxceleb",
             savedir=f"{model_dir}/spkrec-ecapa-voxceleb",
-            run_opts=run_opts,
         )
 
         # Load all enrolled voiceprints
@@ -730,9 +725,6 @@ class SpeakerVerifier:
         audio_np /= 32768.0  # Normalize to [-1.0, 1.0]
 
         signal = torch.tensor(audio_np).unsqueeze(0)
-
-        if self.device == "cuda":
-            signal = signal.to("cuda")
 
         with torch.no_grad():
             embedding = self.classifier.encode_batch(signal)

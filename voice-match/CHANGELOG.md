@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.0.0
+- **Security fix:** `webui.py` no longer ships a hardcoded Flask `secret_key` fallback — it wasn't used (no sessions anywhere), so it's removed entirely instead of defaulting to a guessable value.
+- **Fix:** `/delete_file` now rejects `..`/`.`/path separators explicitly and no longer 500s on an unexpected `IsADirectoryError` — bad input returns a clean 400/404.
+- **Breaking change:** removed the silence-tuning options entirely — *Enable silence threshold*, *Silence threshold (RMS)*, *Enable silence timeout*, *Silence timeout (sec)*, *Enable minimum speech duration*, *Minimum speech duration (sec)*, *Early endpoint on silence*. The early-endpoint / fast-reject-on-silence pipeline that used them has been removed from `handler.py`; every stream is now verified normally. The "0. Калібрування тиші" web UI section (browser mic level meter) is gone along with it.
+- **Fix (web UI):** "Перевірити всі зразки" no longer renders a second, duplicate list of files. It now color-codes (green/yellow/red) the existing sample rows for the *selected* speaker, in place, with a delete button on each row. The samples section is empty and "Перевірити всі зразки" is disabled until a speaker is selected.
+- Removed dead CUDA code paths from `verify.py`, `__main__.py`, and `scripts/enroll.py` — the add-on always runs on CPU (no GPU passthrough on Home Assistant OS/Supervisor), so `--device`/`DEVICE` are gone.
+- aarch64 Docker builds now install the official CPU-only PyTorch wheel (same index as amd64) instead of the default multi-backend wheel — smaller image, faster first start on ARM boards.
+- CI: smoke tests (`scripts/smoke_test.py`) now actually run in GitHub Actions, plus new regression tests for the `/delete_file` traversal fix and for the removed silence/CUDA settings; added `hadolint` linting and a Docker build check for both add-ons; added a check that `CHANGELOG.md` has a section for the version in `config.yaml`.
+- Documented the single global model lock (`_MODEL_LOCK` in `handler.py`): concurrent verify/extract calls from multiple satellites are serialized, since the ECAPA-TDNN model instance isn't thread-safe.
+- README rewritten in English with proper Home Assistant add-on installation/configuration instructions.
+
 ## 2.0.14
 - **Fix: early-endpoint реально обриває pipeline з HA**
 - HA Wyoming STT читає `Transcript` лише ПІСЛЯ повного стріму (`AudioStop`) — ранній Transcript раніше ігнорувався

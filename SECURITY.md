@@ -1,23 +1,32 @@
 # Security
 
-## Дані голосу (Voice Match)
+## Voice data (Voice Match)
 
-- Зразки enrollment і voiceprints зберігаються **локально** на Home Assistant у `/data` аддона (`enrollment/`, `voiceprints/`).
-- Вони **не** надсилаються в хмару Voice Match.
-- Модель ECAPA-TDNN завантажується з Hugging Face (кеш у `/data/hf_cache`) — це лише ваги моделі, не ваші записи.
+- Enrollment samples and voiceprints are stored **locally** on Home
+  Assistant, in the add-on's `/data` directory (`enrollment/`,
+  `voiceprints/`).
+- They are **never** sent to any cloud service by Voice Match.
+- The ECAPA-TDNN model is downloaded from Hugging Face (cached in
+  `/data/hf_cache`) — that's just model weights, not your recordings.
 
-## API-ключі (Wyoming OpenAI STT)
+## API keys (Wyoming OpenAI STT)
 
-- `api_key` зберігається в конфігурації аддона Supervisor і передається лише в обраний STT API (`base_url`).
-- Voice Match **не** отримує і не проксує ваш API-ключ STT — лише аудіо після перевірки голосу.
+- `api_key` is stored in the add-on's Supervisor configuration and is only
+  ever sent to the configured `base_url`.
+- Voice Match never sees or forwards your STT API key — it only forwards
+  audio, after voice verification.
 
-## Мережа
+## Network
 
-- Wyoming-порти (10300 / 10350) слухають у мережі HA. Обмежте доступ до Supervisor/HA за вашими політиками (VPN, firewall).
-- Не публікуйте ці порти в інтернет без додаткового захисту.
+- The Wyoming ports (10300 / 10350) listen on your Home Assistant network.
+  Restrict access to your Supervisor/HA host per your own network policy
+  (VPN, firewall).
+- Do not expose these ports directly to the internet without additional
+  protection.
 
-## Рекомендації
+## Recommendations
 
-1. Не комітьте API-ключі в git.
-2. Регулярно оновлюйте аддони з репозиторію.
-3. Якщо пристрій передаєте — видаліть voiceprints і зразки в UI або через перевстановлення з очищенням data.
+1. Don't commit API keys to git.
+2. Keep the add-ons updated from the repository.
+3. If you're handing off a device, delete voiceprints and samples via the
+   web UI first, or reinstall the add-on with its data wiped.

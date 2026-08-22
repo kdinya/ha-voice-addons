@@ -16,13 +16,14 @@ from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder="/static", static_url_path="/static")
-app.secret_key = os.environ.get("FLASK_SECRET", "voice-match-ingress")
+# No Flask sessions are used anywhere in this app (Ingress already sits
+# behind the Home Assistant Supervisor proxy for auth), so no secret_key
+# is configured.
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
 ENROLLMENT_DIR = Path(os.environ.get("ENROLLMENT_DIR", "/data/enrollment"))
 VOICEPRINTS_DIR = Path(os.environ.get("VOICEPRINTS_DIR", "/data/voiceprints"))
 MODEL_DIR = os.environ.get("MODEL_DIR", "/data/models")
-DEVICE = os.environ.get("DEVICE", "cpu")
 TEMPLATE_DIR = Path("/templates")
 CURRENT_UPSTREAM = os.environ.get("UPSTREAM_URI", "tcp://homeassistant:10300")
 
@@ -323,7 +324,7 @@ def enroll():
         return jsonify({"ok": False, "log": "Немає файлів."}), 400
     cmd = [sys.executable, "-m", "scripts.enroll", "--speaker", speaker,
            "--enrollment-dir", str(ENROLLMENT_DIR), "--voiceprints-dir", str(VOICEPRINTS_DIR),
-           "--model-dir", MODEL_DIR, "--device", DEVICE]
+           "--model-dir", MODEL_DIR]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=os.environ.copy())
         log = (proc.stdout or "") + (proc.stderr or "")
@@ -349,13 +350,22 @@ def delete_samples():
 def delete_file():
     speaker = (request.form.get("speaker") or "").strip().lower()
     filename = (request.form.get("filename") or "").strip()
-    if not SPEAKER_RE.match(speaker) or not filename or "/" in filename:
+    if (
+        not SPEAKER_RE.match(speaker)
+        or not filename
+        or "/" in filename
+        or "\\" in filename
+        or filename in (".", "..")
+    ):
         return jsonify({"ok": False}), 400
     path = ENROLLMENT_DIR / speaker / filename
-    if path.exists():
+    try:
+        if not path.is_file():
+            return jsonify({"ok": False}), 404
         path.unlink()
         return jsonify({"ok": True})
-    return jsonify({"ok": False}), 404
+    except OSError:
+        return jsonify({"ok": False}), 500
 
 
 @app.route("/delete_voiceprint", methods=["POST"])
