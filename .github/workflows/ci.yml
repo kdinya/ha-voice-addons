@@ -17,15 +17,22 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install lightweight test dependencies
+        run: pip install --disable-pip-version-check flask
+
       - name: Syntax check (Voice Match)
         run: |
           python -m py_compile voice-match/entrypoint.py
           python -m py_compile voice-match/webui.py
           python -m py_compile voice-match/scripts/enroll.py
+          python -m py_compile voice-match/scripts/smoke_test.py
           python -m py_compile voice-match/wyoming_voice_match/__init__.py
           python -m py_compile voice-match/wyoming_voice_match/__main__.py
           python -m py_compile voice-match/wyoming_voice_match/handler.py
           python -m py_compile voice-match/wyoming_voice_match/verify.py
+
+      - name: Shell syntax check (Wyoming OpenAI STT)
+        run: bash -n wyoming-openai-stt/entrypoint.sh
 
       - name: Validate config.yaml versions present
         run: |
@@ -52,23 +59,59 @@ jobs:
               print(f"OK structure {path}")
           PY
 
-      - name: Smoke — analyze_wav helpers importable
+      - name: CHANGELOG has a section for the current version
         run: |
           python - <<'PY'
-          # Minimal structural check without torch/speechbrain
-          import ast, pathlib
-          src = pathlib.Path("voice-match/webui.py").read_text(encoding="utf-8")
-          tree = ast.parse(src)
-          routes = []
-          for node in ast.walk(tree):
-              if isinstance(node, ast.FunctionDef):
-                  for dec in node.decorator_list:
-                      if isinstance(dec, ast.Call) and getattr(dec.func, "attr", "") == "route":
-                          if dec.args and isinstance(dec.args[0], ast.Constant):
-                              routes.append(dec.args[0].value)
-          need = ["/api/analyze_blob", "/enroll", "/api/status", "/api/check_quality"]
-          missing = [r for r in need if r not in routes]
-          if missing:
-              raise SystemExit(f"Missing routes: {missing}")
-          print("OK routes:", ", ".join(need))
+          import re, pathlib, sys
+
+          pairs = [
+              ("voice-match/config.yaml", "voice-match/CHANGELOG.md"),
+              ("wyoming-openai-stt/config.yaml", "wyoming-openai-stt/CHANGELOG.md"),
+          ]
+          failed = False
+          for config_path, changelog_path in pairs:
+              config_text = pathlib.Path(config_path).read_text(encoding="utf-8")
+              m = re.search(r'^version:\s*["\']?([^"\'\s]+)', config_text, re.M)
+              version = m.group(1)
+              changelog_text = pathlib.Path(changelog_path).read_text(encoding="utf-8")
+              if not re.search(rf'^##\s*{re.escape(version)}\b', changelog_text, re.M):
+                  print(f"FAIL: {changelog_path} has no '## {version}' section "
+                        f"(release.yml would generate empty notes for this addon)")
+                  failed = True
+              else:
+                  print(f"OK {changelog_path}: has section for {version}")
+          if failed:
+              sys.exit(1)
           PY
+
+      - name: Smoke tests — Voice Match (no torch/speechbrain required)
+        working-directory: voice-match
+        run: python scripts/smoke_test.py
+
+      - name: Regression test — languages injection fix (Wyoming OpenAI STT)
+        run: bash wyoming-openai-stt/tests/test_entrypoint_injection.sh
+
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        addon: [voice-match, wyoming-openai-stt]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint Dockerfile with hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ${{ matrix.addon }}/Dockerfile
+          failure-threshold: error
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (syntax/dependency check only, not pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.addon }}
+          push: false
+          platforms: linux/amd64
