@@ -1,4 +1,14 @@
 name: Release
+#
+# ⚠️ One release per push — push exactly ONE tag when cutting a release,
+# even though the two add-ons (voice-match, wyoming-openai-stt) version
+# independently. This workflow already pulls the matching CHANGELOG
+# section from BOTH add-ons into a single GitHub Release body (falling
+# back to the other add-on's latest section if its version didn't change).
+#
+# Do NOT push a second tag like "wyoming-openai-stt-2.0.0" to "cover" the
+# other add-on, and do NOT run `gh release create` by hand — either one
+# produces a duplicate, empty release. See RELEASING.md.
 
 on:
   push:
