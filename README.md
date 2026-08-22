@@ -103,26 +103,29 @@ Full reference: [wyoming-openai-stt/DOCS.md](wyoming-openai-stt/DOCS.md).
 
 ## Releases
 
-Each add-on is versioned independently via its own `config.yaml`. Both
-add-ons share this repo's git tag namespace, so releases use an
-add-on-prefixed tag to avoid version-number collisions between them:
+Each add-on is versioned independently via its own `config.yaml`, but this
+repo publishes **one combined GitHub Release per release event** — push a
+single tag, and `.github/workflows/release.yml` builds one release body
+containing the changelog section from **both** add-ons:
 
 ```bash
-git tag voice-match-3.0.0
-git push origin voice-match-3.0.0
-
-git tag wyoming-openai-stt-2.0.0
-git push origin wyoming-openai-stt-2.0.0
+git tag 3.0.1
+git push origin 3.0.1
 ```
 
-Bare tags (e.g. `3.0.0`, without a prefix) are still supported for
-backward compatibility with releases published before this convention —
-`release.yml` treats an unprefixed tag as a Voice Match release, since
-that's how every bare tag in this repo's history was used.
+Push **exactly one** tag, matching the version you want as the release
+title (normally the `voice-match` version, since it's the primary
+add-on). The workflow pulls the matching `## <version>` section from
+`voice-match/CHANGELOG.md`; for `wyoming-openai-stt/CHANGELOG.md` it uses
+the same version if present, otherwise falls back to that file's latest
+`##` section — so the release always shows both add-ons' current state.
 
-Pushing either form triggers `.github/workflows/release.yml`, which
-resolves the add-on and version from the tag and builds a GitHub Release
-with notes pulled from that add-on's matching `CHANGELOG.md` section.
+**Do not** push a second, add-on-prefixed tag (e.g.
+`wyoming-openai-stt-2.0.0`) to "also" release the other add-on, and don't
+run `gh release create` by hand — either one produces a duplicate, empty
+release, since the workflow only understands a single bare version tag.
+See [RELEASING.md](RELEASING.md) for the full process and how to clean up
+if a duplicate release slips through.
 
 CI (`.github/workflows/ci.yml`) runs on every push/PR: syntax checks, a
 regression test for the `languages` code-injection fix, add-on smoke tests,
