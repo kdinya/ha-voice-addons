@@ -1,0 +1,85 @@
+name: Release
+
+# Two tag schemes are supported, because both add-ons live in one repo and
+# therefore share a single git tag namespace:
+#
+#   3.0.0                     — legacy/bare tag, always Voice Match
+#                                (kept for compatibility with existing tags
+#                                 1.5.0 .. 3.0.0 already published this way)
+#   voice-match-3.0.0         — explicit, unambiguous, for Voice Match
+#   wyoming-openai-stt-2.0.0  — explicit, unambiguous, for Wyoming OpenAI STT
+#
+# New releases should use the addon-prefixed form so a version number
+# already used by one add-on (e.g. "2.0.0", already taken by an old Voice
+# Match release) never blocks a release of the other add-on again.
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "[0-9]+.*"
+      - "voice-match-*"
+      - "wyoming-openai-stt-*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve add-on and version from tag
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" == wyoming-openai-stt-* ]]; then
+            ADDON="wyoming-openai-stt"
+            ADDON_TITLE="Wyoming OpenAI STT"
+            VERSION="${TAG#wyoming-openai-stt-}"
+          elif [[ "$TAG" == voice-match-* ]]; then
+            ADDON="voice-match"
+            ADDON_TITLE="Voice Match"
+            VERSION="${TAG#voice-match-}"
+          else
+            # Legacy bare tag (v1.2.3 or 1.2.3) — always Voice Match, for
+            # compatibility with tags published before add-on prefixes.
+            ADDON="voice-match"
+            ADDON_TITLE="Voice Match"
+            VERSION="${TAG#v}"
+          fi
+          echo "ADDON=$ADDON" >> $GITHUB_OUTPUT
+          echo "ADDON_TITLE=$ADDON_TITLE" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Notes from CHANGELOG
+        id: notes
+        run: |
+          ADDON="${{ steps.ver.outputs.ADDON }}"
+          ADDON_TITLE="${{ steps.ver.outputs.ADDON_TITLE }}"
+          VER="${{ steps.ver.outputs.VERSION }}"
+          CHANGELOG="$ADDON/CHANGELOG.md"
+          {
+            echo "## $ADDON_TITLE $VER"
+            if [ -f "$CHANGELOG" ]; then
+              awk -v v="$VER" '
+                $0 ~ "^##[[:space:]]*"v"([[:space:]]|$)" {p=1; print; next}
+                p && /^## / {exit}
+                p {print}
+              ' "$CHANGELOG"
+            fi
+          } > /tmp/notes.md
+          if [ "$(wc -l < /tmp/notes.md)" -le 1 ]; then
+            echo "::warning::No '## $VER' section found in $CHANGELOG — release notes will be mostly empty."
+          fi
+          echo "path=/tmp/notes.md" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "${{ steps.ver.outputs.ADDON_TITLE }} ${{ steps.ver.outputs.VERSION }}"
+          body_path: /tmp/notes.md
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
