@@ -103,9 +103,27 @@ Full reference: [wyoming-openai-stt/DOCS.md](wyoming-openai-stt/DOCS.md).
 
 ## Releases
 
-Each add-on is versioned independently via its own `config.yaml`. Tagging a
-commit on `main` triggers `.github/workflows/release.yml`, which builds a
-GitHub Release with notes pulled from the matching `CHANGELOG.md` section.
+Each add-on is versioned independently via its own `config.yaml`. Both
+add-ons share this repo's git tag namespace, so releases use an
+add-on-prefixed tag to avoid version-number collisions between them:
+
+```bash
+git tag voice-match-3.0.0
+git push origin voice-match-3.0.0
+
+git tag wyoming-openai-stt-2.0.0
+git push origin wyoming-openai-stt-2.0.0
+```
+
+Bare tags (e.g. `3.0.0`, without a prefix) are still supported for
+backward compatibility with releases published before this convention —
+`release.yml` treats an unprefixed tag as a Voice Match release, since
+that's how every bare tag in this repo's history was used.
+
+Pushing either form triggers `.github/workflows/release.yml`, which
+resolves the add-on and version from the tag and builds a GitHub Release
+with notes pulled from that add-on's matching `CHANGELOG.md` section.
+
 CI (`.github/workflows/ci.yml`) runs on every push/PR: syntax checks, a
 regression test for the `languages` code-injection fix, add-on smoke tests,
 a check that `CHANGELOG.md` has an entry for the current `config.yaml`
